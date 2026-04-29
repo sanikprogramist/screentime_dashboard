@@ -16,7 +16,7 @@ con <- dbConnect(RSQLite::SQLite(), dbname = db_path) # connect to db
 # the connect object must be passed to all other functions to do with the db
 ```
 
-#exploring the database
+# exploring the database
 ```{r}
 print(dbListTables(con)) # list all contained tables
 print(dbListFields(con,"eventmodel")) # list the fields, "columns", in a given table
