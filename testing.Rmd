@@ -1,0 +1,42 @@
+---
+title: "test"
+author: "alexM"
+date: "2026-04-28"
+output: html_document
+---
+
+# loading and connecting database
+```{r}
+# Load libraries and database
+library(DBI)
+library(RSQLite)
+ 
+db_path <- "C:/Users/Sanik/AppData/Local/activitywatch/activitywatch/aw-server/peewee-sqlite.v2.db"
+con <- dbConnect(RSQLite::SQLite(), dbname = db_path) # connect to db
+# the connect object must be passed to all other functions to do with the db
+```
+
+#exploring the database
+```{r}
+print(dbListTables(con)) # list all contained tables
+print(dbListFields(con,"eventmodel")) # list the fields, "columns", in a given table
+df = dbReadTable(con,"eventmodel") # read entire table
+apps = dbGetQuery(con, "SELECT * FROM eventmodel WHERE bucket_id = 1") # this is an SQL query
+websites = dbGetQuery(con, "SELECT timestamp, duration, datastr FROM eventmodel WHERE bucket_id = 3")
+dbDisconnect(con)
+```
+# cleaning and saving rds
+```{r}
+#lets theoretically clean the data:
+# Convert timestamp to datetime
+websites$timestamp <- as.POSIXct(websites$timestamp, format = "%Y-%m-%d %H:%M:%S")
+# Convert duration to numeric if needed
+websites$duration <- as.numeric(websites$duration)
+#something like that
+#now we can save the cleaned data as an rds:
+saveRDS(websites, "data/websites_test.rds")
+# and we can read that like this:
+# df = readRDS("data/websites_test.rds")
+```
+
+
