@@ -10,6 +10,7 @@ output: html_document
 # Load libraries and database
 library(DBI)
 library(RSQLite)
+library(tidyverse)
  
 db_path <- "C:/Users/Sanik/AppData/Local/activitywatch/activitywatch/aw-server/peewee-sqlite.v2.db"
 con <- dbConnect(RSQLite::SQLite(), dbname = db_path) # connect to db
@@ -37,6 +38,44 @@ websites$duration <- as.numeric(websites$duration)
 saveRDS(websites, "data/websites_test.rds")
 # and we can read that like this:
 # df = readRDS("data/websites_test.rds")
+```
+```{r}
+library(tidyverse)
+library(lubridate)
+apps = readRDS("data/apps_clean.rds")
+websites = readRDS("data/websites_clean.rds")
+#lets separate the column event_start:
+
+apps <- apps %>% 
+  mutate(week=floor_date(event_start, unit="week"),
+         day = floor_date(event_start, unit="day"),
+         month = floor_date(event_start, unit="month")) %>% 
+  mutate(category = case_when(is.na(category) ~ "Other", 
+                              category == "browser" ~ "Browser",
+                                TRUE ~ category))
+
+websites <- websites %>% 
+  mutate(week=floor_date(event_start, unit="week"),
+         day = floor_date(event_start, unit="day"),
+         month = floor_date(event_start, unit="month")) %>% 
+  mutate(category = case_when(is.na(category) ~ "Other", TRUE ~ category))
+
+total_time_apps = apps %>% 
+  group_by(week, category) %>%
+  summarise(total_time=sum(active_duration))
+
+#now a stacked colourful barchart for the categories:
+total_time_apps %>% 
+  #filter(category=="Browser") %>% 
+  ggplot(aes(x= week, y= total_time/3600, fill=category)) +
+  theme_minimal()+
+  geom_bar(stat="identity")+
+  labs(y="Total time (hours)", x="Week")
+
+```
+```{r}
+total_time_apps %>% group_by(category) %>% 
+  summarise(sum(total_time))
 ```
 
 

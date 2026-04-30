@@ -21,6 +21,9 @@ afk_df   <- full_df |> filter(bucket_id == 2)  # idle/active status events
 websites <- full_df |> filter(bucket_id == 3)  # firefox tab events
 
 # --- 2. Build merged AFK intervals --------------------------------------------
+# Our first task is to remove the time where I was afk. 
+# AFK time is not meaningful laptop usage, and therefore should be excluded
+
 
 # Parse AFK events, keep only "afk" (idle) periods, and deduplicate
 afk_raw <- afk_df |>
@@ -118,12 +121,50 @@ websites_clean <- websites_clean |>
     event_start = with_tz(event_start, local_tz),
     event_end   = with_tz(event_end,   local_tz)
   ) |>
-  select(event_start, event_end, active_duration, url, domain, title)
+  select(event_start, event_end, active_duration, domain, title)
 
+# --- 5. Categorisation -------------------------------------------------------
+# Give top 100 domains and all apps categories using LLMs
+library(tidyverse)
 
+# Top 100 domains with hours + a few sample titles for LLM context
+domains_template <- websites_clean |>
+  group_by(name = domain) |>
+  summarise(
+    hours         = round(sum(active_duration) / 3600, 2),
+    sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
+    .groups = "drop"
+  ) |>
+  arrange(desc(hours)) |>
+  slice_head(n = 100) |>
+  mutate(type = "website", category = "")
 
+# All apps with hours + sample titles
+apps_template <- apps_clean |>
+  group_by(name = app) |>
+  summarise(
+    hours         = round(sum(active_duration) / 3600, 2),
+    sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
+    .groups = "drop"
+  ) |>
+  arrange(desc(hours)) |>
+  mutate(type = "app", category = "")
 
-# --- 4. Save -----------------------------------------------------------------
+template <- bind_rows(domains_template, apps_template) |>
+  select(type, name, hours, category, sample_titles)
+
+write_csv(template, "data/categories_template.csv")
+# This template can be fed into an LLM which will automatically categorise the top websites and apps into categories
+# The prompt used was: "I have a CSV with columns: type (app or website), name (domain or .exe name), hours (time spent), and sample_titles (an example of a window titles seen while using it, just for context for you). Please fill in the category column for each row. Use consistent category names like. If you're unsure you can look up the website/process name. Return the result as a CSV with only the name and category columns."
+# This was done using Anthropic Claude model Sonnet 4.6
+# it is then saved under "data/categories.csv"
+
+categories <- read_csv("data/categories.csv")
+apps_clean = apps_clean |> 
+  left_join(categories |> mutate(app=name) |> select(-name))
+websites_clean = websites_clean |>
+  left_join(categories |> mutate(domain=name) |> select(-name))
+# --- 6. Save -----------------------------------------------------------------
 
 dir.create("data", showWarnings = FALSE)
 saveRDS(apps_clean,     "data/apps_clean.rds")
