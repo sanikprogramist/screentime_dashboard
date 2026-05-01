@@ -77,5 +77,26 @@ total_time_apps %>%
 total_time_apps %>% group_by(category) %>% 
   summarise(sum(total_time))
 ```
+```{r}
+apps = readRDS("data/apps_clean.rds")
+
+metric_df = apps %>% 
+  mutate(week = floor_date(event_start, unit="week"))
+metric_df = metric_df %>% 
+  group_by(week) %>% 
+  summarise(total=sum(active_duration)/3600)# %>% sort(week, decreasing=FALSE)
+    
+last_four_weeks = metric_df %>% 
+  slice_tail(n=4) %>% 
+  pull(total) %>% 
+  mean() # final 4 weeks average
+    
+first_four_weeks = metric_df %>% 
+  slice_head(n=4) %>% 
+  pull(total) %>% 
+  mean() # final 4 weeks average
+    
+pct_change <- ((last_four_weeks - first_four_weeks) / first_four_weeks) * 100
+```
 
 

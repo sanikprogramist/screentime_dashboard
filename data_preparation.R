@@ -16,6 +16,11 @@ con     <- dbConnect(SQLite(), db_path)
 full_df <- dbGetQuery(con, "SELECT bucket_id, timestamp, duration, datastr FROM eventmodel")
 dbDisconnect(con)
 
+cutoff_date <- ymd_hms("2026-02-01 00:00:00")
+full_df <- full_df |>
+  mutate(timestamp = ymd_hms(timestamp)) |>
+  filter(timestamp >= cutoff_date)
+
 apps     <- full_df |> filter(bucket_id == 1)  # active window events
 afk_df   <- full_df |> filter(bucket_id == 2)  # idle/active status events
 websites <- full_df |> filter(bucket_id == 3)  # firefox tab events
