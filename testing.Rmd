@@ -79,12 +79,24 @@ total_time_apps %>% group_by(category) %>%
 ```
 ```{r}
 apps = readRDS("data/apps_clean.rds")
+app_cats <- apps |>
+  group_by(category) |>
+  summarise(hours = sum(active_duration) / 3600) |>
+  filter(hours >= 1) |>
+  arrange(desc(hours)) |>
+  pull(category)
 
-metric_df = apps %>% 
-  mutate(week = floor_date(event_start, unit="week"))
-metric_df = metric_df %>% 
-  group_by(week) %>% 
-  summarise(total=sum(active_duration)/3600)# %>% sort(week, decreasing=FALSE)
+apps     <- apps     |> filter(category %in% app_cats)
+
+
+
+metric_df <- apps %>%
+  mutate(week = floor_date(event_start, unit = "week")) %>%
+  group_by(week, category) %>%
+  summarise(total = sum(active_duration) / 3600, .groups = "drop") %>%
+  complete(week, category, fill = list(total = 0)) %>% 
+  filter(category=="Gaming")
+
     
 last_four_weeks = metric_df %>% 
   slice_tail(n=4) %>% 

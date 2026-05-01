@@ -3,6 +3,7 @@ library(bslib)
 library(tidyverse)
 library(lubridate)
 library(thematic)
+library(plotly)
 
 thematic_shiny()
 
@@ -73,7 +74,7 @@ apply_top_n <- function(df, cat_ranking, n) {
   df |>
     mutate(
       category = if_else(category %in% top_cats, category, "Other"),
-      category = factor(category, levels = rev(c(top_cats, "Other")))
+      category = factor(category, levels = c(top_cats, "Other"))
     )
 }
 
@@ -205,22 +206,22 @@ ui <- page_navbar(
           div(class = "metric-label", "📊 Last 4 weeks average"),
           div(class = "metric-value", uiOutput("metric_current_period")),
           div(class = "metric-subtitle",
-              uiOutput("metric_trend_arrow"))
+              uiOutput("metric_trend_arrow")) 
         ),
         # Metric 3: Productivity Split
         div(
           class = "metric-card",
-          div(class = "metric-label", "✨ Productivity Score"),
-          div(class = "metric-value", uiOutput("metric_productivity")),
+          div(class = "metric-label", "✨Last 4 Weeks Video Game time"),
+          div(class = "metric-value", uiOutput("metric_video_games")),
           div(class = "metric-subtitle",
-              span("Productive vs. distracting"))
+              uiOutput("metric_video_game_trend_arrow"))
         )
       ),
       
       card(
         full_screen = TRUE,
         card_header("App Usage Over Time"),
-        plotOutput("chart_apps", height = "100%")
+        plotlyOutput("chart_apps", height = "100%")
       )
     )
   ),
@@ -237,11 +238,34 @@ ui <- page_navbar(
         sliderInput("top_n_web", "Top categories",
                     min = 1, max = length(web_cats), value = 8, step = 1)
       ),
-      
+
+      div(
+        class = "metrics-row",
+        div(
+          class = "metric-card",
+          div(class = "metric-label", "🏆 Top Domain"),
+          div(class = "metric-value", style = "font-size: 1.2rem; word-break: break-all;",
+              uiOutput("metric_web_top_domain")),
+          div(class = "metric-subtitle", span("Most visited site overall"))
+        ),
+        div(
+          class = "metric-card",
+          div(class = "metric-label", "🤖 AI Usage"),
+          div(class = "metric-value", uiOutput("metric_web_ai")),
+          div(class = "metric-subtitle", span("Weekly avg · claude.ai + chatgpt.com"))
+        ),
+        div(
+          class = "metric-card",
+          div(class = "metric-label", "🌐 Sites Explored"),
+          div(class = "metric-value", uiOutput("metric_web_domains")),
+          div(class = "metric-subtitle", span("Unique domains visited"))
+        )
+      ),
+
       card(
         full_screen = TRUE,
         card_header("Website Usage Over Time"),
-        plotOutput("chart_web", height = "100%")
+        plotlyOutput("chart_web", height = "100%")
       )
     )
   )
@@ -255,24 +279,91 @@ PRODUCTIVE_WEB <- c("Learning", "Documentation", "Work", "Development", "Utiliti
 # --- Server -------------------------------------------------------------------
 server <- function(input, output, session) {
 
-  # Apps chart
+  # Apps chart — includes top 3 apps per (period, category) for tooltip
   apps_data <- reactive({
-    apps |>
+    # app_cats is sorted desc by total hours; preserve that order for selected cats
+    cat_order <- app_cats[app_cats %in% input$cats_apps]
+
+    filtered <- apps |>
       filter(category %in% input$cats_apps) |>
-      mutate(period = floor_date(event_start, input$period_apps, week_start = 1)) |>
+      mutate(
+        period   = floor_date(event_start, input$period_apps, week_start = 1),
+        category = factor(category, levels = cat_order)
+      )
+
+    # Pre-compute top 3 apps per segment for tooltip
+    top3 <- filtered |>
+      group_by(period, category, app) |>
+      summarise(app_hours = sum(active_duration) / 3600, .groups = "drop") |>
       group_by(period, category) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop")
+      slice_max(app_hours, n = 3, with_ties = FALSE) |>
+      mutate(app_label = paste0(app, " (", round(app_hours, 1), "h)")) |>
+      summarise(top_apps = paste(app_label, collapse = "<br>"), .groups = "drop")
+
+    filtered |>
+      group_by(period, category) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      left_join(top3, by = c("period", "category")) |>
+      mutate(
+        tooltip = paste0(
+          "<b>", category, "</b>  ", round(hours, 1), "h<br>",
+          "<span style='color:#9ca3af'>", top_apps, "</span>"
+        )
+      )
   })
 
-  output$chart_apps <- renderPlot(bg = "transparent",{
-    date_fmt <- if (input$period_apps == "week") "%b %d" else "%b '%y"
-    ggplot(apps_data(), aes(x = period, y = hours, fill = category)) +
+  output$chart_apps <- renderPlotly({
+    date_fmt <- if (input$period_apps == "week") "%b %d" else "%b %Y"
+
+    p <- ggplot(apps_data(), aes(x = period, y = hours, fill = category, text = tooltip)) +
       geom_bar(stat = "identity") +
       scale_fill_manual(values = app_colors) +
       scale_y_continuous(limits = c(0, max_y_apps[[input$period_apps]]), expand = c(0, 0)) +
       scale_x_datetime(date_labels = date_fmt) +
       chart_theme() +
       labs(x = NULL, y = "Hours")
+
+    ggplotly(p, tooltip = "text") |>
+      layout(
+        paper_bgcolor = "rgba(0,0,0,0)",
+        plot_bgcolor  = "rgba(0,0,0,0)",
+        font          = list(family = "Inter", color = "#aaaaaa"),
+        legend        = list(font = list(color = "#fcfcfc")),
+        hoverlabel    = list(
+          bgcolor   = "#1f2937",
+          bordercolor = "#6366f1",
+          font      = list(family = "Inter", size = 16, color = "#f3f4f6")
+        )
+      ) %>%
+      htmlwidgets::onRender("
+        function(el, x) {
+          el.on('plotly_hover', function(d) {
+            var hoveredCurve = d.points[0].curveNumber;
+            var hoveredPoint = d.points[0].pointNumber;
+            var n = el.data.length;
+            var opacityArrays = [];
+            for (var i = 0; i < n; i++) {
+              var pts = el.data[i].x.length;
+              var arr = [];
+              for (var j = 0; j < pts; j++) {
+                arr.push((i === hoveredCurve && j === hoveredPoint) ? 0.7 : 1);
+              }
+              opacityArrays.push(arr);
+            }
+            Plotly.restyle(el, {'marker.opacity': opacityArrays});
+          });
+          el.on('plotly_unhover', function() {
+            var n = el.data.length;
+            var resets = [];
+            for (var i = 0; i < n; i++) {
+              resets.push(Array(el.data[i].x.length).fill(1));
+            }
+            Plotly.restyle(el, {'marker.opacity': resets});
+          });
+        }
+      ") |>
+      config(displayModeBar = FALSE)
+    
   })
 
   # === METRICS FOR APPS TAB ===
@@ -320,49 +411,173 @@ server <- function(input, output, session) {
     pct_change <- ((last_four_weeks - first_four_weeks) / first_four_weeks) * 100
     
     if (pct_change < 0) {
-      HTML(paste0('<span class="metric-trend">↓ ', round(abs(pct_change), 0), '% from start</span>'))
+      HTML(paste0('<span class="metric-trend">↓ ', round(abs(pct_change), 0), '% compared to first 4 weeks</span>'))
     } else {
-      HTML(paste0('<span class="metric-trend negative">↑ ', round(pct_change, 0), '% from start</span>'))
+      HTML(paste0('<span class="metric-trend negative">↑ ', round(pct_change, 0), '% compared to first 4 weeks</span>'))
     }
   })
   
-  # Productivity score (% of time on productive categories)
-  output$metric_productivity <- renderUI({
-    productive_hours <- apps |>
-      filter(category %in% PRODUCTIVE_APPS) |>
-      pull(active_duration) |> sum() / 3600
+  # Video game trend
+  output$metric_video_games <- renderUI({
+    metric_df <- apps %>%
+      mutate(week = floor_date(event_start, unit = "week")) %>%
+      group_by(week, category) %>%
+      summarise(total = sum(active_duration) / 3600, .groups = "drop") %>%
+      complete(week, category, fill = list(total = 0)) %>% 
+      filter(category == "Gaming")
     
-    web_productive_hours <- websites |>
-      filter(category %in% PRODUCTIVE_WEB) |>
-      pull(active_duration) |> sum() / 3600
+    current_week_time = metric_df %>% 
+      slice_tail(n=4) %>% 
+      pull(total) %>% 
+      mean() # final 4 weeks average
     
-    total_hours <- (sum(apps$active_duration) + sum(websites$active_duration)) / 3600
-    productivity_pct <- (productive_hours + web_productive_hours) / total_hours * 100
-    
-    HTML(paste0(round(productivity_pct, 0), "%"))
-  })
-
-  # Websites chart
-  web_data <- reactive({
-    apply_top_n(websites, web_cats, input$top_n_web) |>
-      mutate(period = floor_date(event_start, input$period_web, week_start = 1)) |>
-      group_by(period, category) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop")
+    HTML(paste0(round(current_week_time, 1), "h"))
   })
   
-  output$chart_web <- renderPlot(bg = "transparent", {
-    date_fmt <- if (input$period_web == "week") "%b %d" else "%b '%y"
-    ggplot(web_data(), aes(x = period, y = hours, fill = category)) +
+  output$metric_video_game_trend_arrow <- renderUI({
+    metric_df <- apps %>%
+      mutate(week = floor_date(event_start, unit = "week")) %>%
+      group_by(week, category) %>%
+      summarise(total = sum(active_duration) / 3600, .groups = "drop") %>%
+      complete(week, category, fill = list(total = 0)) %>% 
+      filter(category == "Gaming")
+    
+    last_four_weeks = metric_df %>% 
+      slice_tail(n=4) %>% 
+      pull(total) %>% 
+      mean() # final 4 weeks average
+    
+    first_four_weeks = metric_df %>% 
+      slice_head(n=4) %>% 
+      pull(total) %>% 
+      mean() # final 4 weeks average
+    
+    pct_change <- ((last_four_weeks - first_four_weeks) / first_four_weeks) * 100
+    
+    if (pct_change < 0) {
+      HTML(paste0('<span class="metric-trend">↓ ', round(abs(pct_change), 0), '% compared to first 4 weeks</span>'))
+    } else {
+      HTML(paste0('<span class="metric-trend negative">↑ ', round(pct_change, 0), '% compared to first 4 weeks</span>'))
+    }
+  })
+
+  # Websites chart — tooltips handle "Other" by computing top domains per display category
+  web_data <- reactive({
+    top_cats <- web_cats[seq_len(input$top_n_web)]
+
+    enriched <- websites |>
+      mutate(
+        period      = floor_date(event_start, input$period_web, week_start = 1),
+        display_cat = if_else(category %in% top_cats, category, "Other")
+      )
+
+    # Top 3 domains per (period, display_cat) — correctly groups "Other" domains together
+    top3 <- enriched |>
+      filter(!is.na(domain)) |>
+      group_by(period, display_cat, domain) |>
+      summarise(dom_hours = sum(active_duration) / 3600, .groups = "drop") |>
+      group_by(period, display_cat) |>
+      slice_max(dom_hours, n = 3, with_ties = FALSE) |>
+      mutate(dom_label = paste0(domain, " (", round(dom_hours, 1), "h)")) |>
+      summarise(top_domains = paste(dom_label, collapse = "<br>"), .groups = "drop")
+
+    enriched |>
+      mutate(
+        category = factor(display_cat, levels = c(top_cats, "Other"))
+      ) |>
+      group_by(period, category) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      left_join(top3, by = c("period", "category" = "display_cat")) |>
+      mutate(
+        tooltip = paste0(
+          "<b>", category, "</b>  ", round(hours, 1), "h<br>",
+          "<span style='color:#9ca3af'>", top_domains, "</span>"
+        )
+      )
+  })
+
+  output$chart_web <- renderPlotly({
+    date_fmt <- if (input$period_web == "week") "%b %d" else "%b %Y"
+
+    p <- ggplot(web_data(), aes(x = period, y = hours, fill = category, text = tooltip)) +
       geom_bar(stat = "identity") +
       scale_fill_manual(values = web_colors, drop = TRUE) +
       scale_y_continuous(limits = c(0, max_y_web[[input$period_web]]), expand = c(0, 0)) +
       scale_x_datetime(date_labels = date_fmt) +
       chart_theme() +
       labs(x = NULL, y = "Hours")
+
+    ggplotly(p, tooltip = "text") |>
+      layout(
+        paper_bgcolor = "rgba(0,0,0,0)",
+        plot_bgcolor  = "rgba(0,0,0,0)",
+        font          = list(family = "Inter", color = "#aaaaaa"),
+        legend        = list(font = list(color = "#fcfcfc")),
+        hoverlabel    = list(
+          bgcolor     = "#1f2937",
+          bordercolor = "#6366f1",
+          font        = list(family = "Inter", size = 16, color = "#f3f4f6")
+        )
+      ) %>%
+      htmlwidgets::onRender("
+        function(el, x) {
+          el.on('plotly_hover', function(d) {
+            var hoveredCurve = d.points[0].curveNumber;
+            var hoveredPoint = d.points[0].pointNumber;
+            var n = el.data.length;
+            var opacityArrays = [];
+            for (var i = 0; i < n; i++) {
+              var pts = el.data[i].x.length;
+              var arr = [];
+              for (var j = 0; j < pts; j++) {
+                arr.push((i === hoveredCurve && j === hoveredPoint) ? 0.7 : 1);
+              }
+              opacityArrays.push(arr);
+            }
+            Plotly.restyle(el, {'marker.opacity': opacityArrays});
+          });
+          el.on('plotly_unhover', function() {
+            var n = el.data.length;
+            var resets = [];
+            for (var i = 0; i < n; i++) {
+              resets.push(Array(el.data[i].x.length).fill(1));
+            }
+            Plotly.restyle(el, {'marker.opacity': resets});
+          });
+        }
+      ") |>
+      config(displayModeBar = FALSE)
   })
 
   # === METRICS FOR WEBSITES TAB ===
-  
+
+  # Top domain by total hours
+  output$metric_web_top_domain <- renderUI({
+    top <- websites |>
+      filter(!is.na(domain)) |>
+      group_by(domain) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      slice_max(hours, n = 1)
+    HTML(paste0(top$domain, "<br><small style='color:#9ca3af;font-size:0.75rem'>",
+                round(top$hours, 0), "h total</small>"))
+  })
+
+  # AI tools weekly average
+  output$metric_web_ai <- renderUI({
+    ai_weekly <- websites |>
+      filter(category == "AI Tools") |>
+      mutate(week = floor_date(event_start, "week")) |>
+      group_by(week) |>
+      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+      pull(hrs) |> mean()
+    HTML(paste0(round(ai_weekly, 1), "h/wk"))
+  })
+
+  # Unique domains visited
+  output$metric_web_domains <- renderUI({
+    n <- websites |> pull(domain) |> n_distinct()
+    HTML(as.character(n))
+  })
 }
 
 shinyApp(ui, server)
