@@ -226,6 +226,16 @@ ui <- page_navbar(
     )
   ),
 
+  # --- Time of Day tab ---
+  nav_panel(
+    title = "Time of Day",
+    card(
+      full_screen = TRUE,
+      card_header("Hourly Usage Patterns"),
+      plotOutput("chart_tod", height = "100%")
+    )
+  ),
+
   # --- Websites tab ---
   nav_panel(
     title = "Websites",
@@ -270,11 +280,6 @@ ui <- page_navbar(
     )
   )
 )
-
-# --- Category Classifications (for productivity metrics) ----------------------
-# Define which categories count as "productive" vs "distracting"
-PRODUCTIVE_APPS <- c("Browser", "Development", "Communication", "Productivity", "OS & System")
-PRODUCTIVE_WEB <- c("Learning", "Documentation", "Work", "Development", "Utilities")
 
 # --- Server -------------------------------------------------------------------
 server <- function(input, output, session) {
@@ -547,6 +552,14 @@ server <- function(input, output, session) {
         }
       ") |>
       config(displayModeBar = FALSE)
+  })
+
+  # Time of Day chart (placeholder)
+  output$chart_tod <- renderPlot(bg = "transparent", {
+    ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = "Coming soon", 
+               color = "#9ca3af", size = 10) +
+      theme_void()
   })
 
   # === METRICS FOR WEBSITES TAB ===

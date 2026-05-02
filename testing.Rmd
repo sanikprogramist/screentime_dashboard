@@ -79,36 +79,51 @@ total_time_apps %>% group_by(category) %>%
 ```
 ```{r}
 apps = readRDS("data/apps_clean.rds")
-app_cats <- apps |>
-  group_by(category) |>
-  summarise(hours = sum(active_duration) / 3600) |>
-  filter(hours >= 1) |>
-  arrange(desc(hours)) |>
-  pull(category)
 
-apps     <- apps     |> filter(category %in% app_cats)
+apps = apps %>% 
+    mutate(next_hour_boundary = ceiling_date(event_start, "hour"), 
+           time_until_next_hour = next_hour_boundary - event_start, 
+           excess_time = active_duration - time_until_next_hour) 
+
+overflow = apps %>% 
+  filter(excess_time>0)
+no_overflow = apps %>% 
+  filter(excess_time <=0)
+  
+current = overflow
+while (TRUE){
+  
+  #calculate excess time
+  current = current %>% 
+    mutate(next_hour_boundary = ceiling_date((event_start+1), "hour"), 
+           time_until_next_hour = next_hour_boundary - event_start, 
+           excess_time = active_duration - time_until_next_hour)
+  
+  #for all rows, set active_duration to remaining time in the hour
+  current = current %>% 
+    mutate(active_duration = as.numeric(time_until_next_hour))
+  
+  #however, there is excess time. so we create a new data_frame, which will be tagged on to current:
+  excess_time = current %>% 
+    filter(excess_time > 0)
+  
+  if (nrow(excess_time) == 0) break 
+
+  #we will now change the rows such that they become next hour and set active duration as excess time
+  excess_time = excess_time %>% 
+    mutate(event_start = next_hour_boundary,
+           active_duration = as.numeric(excess_time))
+  
+  overflow = current %>% bind_rows(excess_time)
+  current = overflow
+}
+
+apps = no_overflow %>% bind_rows(overflow)
 
 
 
-metric_df <- apps %>%
-  mutate(week = floor_date(event_start, unit = "week")) %>%
-  group_by(week, category) %>%
-  summarise(total = sum(active_duration) / 3600, .groups = "drop") %>%
-  complete(week, category, fill = list(total = 0)) %>% 
-  filter(category=="Gaming")
 
-    
-last_four_weeks = metric_df %>% 
-  slice_tail(n=4) %>% 
-  pull(total) %>% 
-  mean() # final 4 weeks average
-    
-first_four_weeks = metric_df %>% 
-  slice_head(n=4) %>% 
-  pull(total) %>% 
-  mean() # final 4 weeks average
-    
-pct_change <- ((last_four_weeks - first_four_weeks) / first_four_weeks) * 100
+
 ```
 
 
