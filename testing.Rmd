@@ -73,10 +73,14 @@ total_time_apps %>%
   labs(y="Total time (hours)", x="Week")
 
 ```
+
+
 ```{r}
 total_time_apps %>% group_by(category) %>% 
   summarise(sum(total_time))
 ```
+
+
 ```{r}
 apps = readRDS("data/apps_clean.rds")
 
@@ -100,8 +104,12 @@ while (TRUE){
            excess_time = active_duration - time_until_next_hour)
   
   #for all rows, set active_duration to remaining time in the hour
-  current = current %>% 
-    mutate(active_duration = as.numeric(time_until_next_hour))
+  current = current %>%
+  mutate(active_duration = case_when(
+    as.numeric(excess_time) > 0 ~ as.numeric(time_until_next_hour),
+    TRUE ~ as.numeric(active_duration)
+  ))
+
   
   #however, there is excess time. so we create a new data_frame, which will be tagged on to current:
   excess_time = current %>% 
@@ -118,7 +126,41 @@ while (TRUE){
   current = overflow
 }
 
-apps = no_overflow %>% bind_rows(overflow)
+apps2 = no_overflow %>% bind_rows(overflow)
+
+apps2 %>% mutate(week = floor_date(event_start, "week")) %>% 
+  group_by(week) %>% 
+  summarise(sum(active_duration))
+
+apps %>% mutate(week = floor_date(event_start, "week")) %>% 
+  group_by(week) %>% 
+  summarise(sum(active_duration))
+
+```
+
+```{r}
+websites_clean %>% mutate(week = floor_date(event_start, "week")) %>% 
+  group_by(week) %>% 
+  summarise(sum(active_duration))
+
+websites_tod %>% mutate(week = floor_date(event_start, "week")) %>% 
+  group_by(week) %>% 
+  summarise(sum(active_duration))
+```
+```{r}
+apps = readRDS("data/apps_clean.rds")
+apps %>% mutate(week = floor_date(event_start, "week")) %>% 
+  group_by(week,category) %>% summarise(total_duration = sum(active_duration)/3600) %>% 
+  filter(category=="Browser") %>% 
+  pull(total_duration)
+
+apps %>%
+  mutate(week = floor_date(event_start, "week", week_start = 1)) %>%
+  group_by(week, category) %>%
+  summarise(total_duration = sum(active_duration) / 3600) %>%
+  filter(category == "Browser") %>%
+  pull(total_duration)
+
 
 
 

@@ -12,7 +12,7 @@ apps     <- readRDS("data/apps_clean.rds")
 websites <- readRDS("data/websites_clean.rds")
 
 # Drop categories with less than 30 minutes of total usage
-MIN_HOURS <- 1 # keep the min hours as 1
+MIN_HOURS <- 1
 
 app_cats <- apps |>
   group_by(category) |>

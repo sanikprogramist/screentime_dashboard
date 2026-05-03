@@ -17,9 +17,12 @@ full_df <- dbGetQuery(con, "SELECT bucket_id, timestamp, duration, datastr FROM 
 dbDisconnect(con)
 
 cutoff_date <- ymd_hms("2026-02-01 00:00:00")
+cutoff_date_max <- ymd_hms("2026-05-03 00:00:00")
+
 full_df <- full_df |>
   mutate(timestamp = ymd_hms(timestamp)) |>
-  filter(timestamp >= cutoff_date)
+  filter(timestamp >= cutoff_date) |>
+  filter(timestamp <= cutoff_date_max)
 
 apps     <- full_df |> filter(bucket_id == 1)  # active window events
 afk_df   <- full_df |> filter(bucket_id == 2)  # idle/active status events
@@ -170,9 +173,6 @@ apps_clean = apps_clean |>
 websites_clean = websites_clean |>
   left_join(categories |> mutate(domain=name) |> select(-name))
 
-
-
-
 # --- 6. Split events by hour for time-of-day analysis ------------------------
 # AFK time has already been removed from active_duration, so we are
 # distributing genuine active time across hour bins. Each event is split at
@@ -183,64 +183,66 @@ split_by_hour <- function(df) {
   # will have time_until_next_hour == 0 and land in overflow — handled below)
   df <- df |>
     mutate(
-      next_hour_boundary   = ceiling_date(event_start, "hour"),
+      next_hour_boundary   = ceiling_date(event_start+1, "hour"),
       time_until_next_hour = as.numeric(next_hour_boundary - event_start),
       excess_time          = active_duration - time_until_next_hour
     )
 
   no_overflow <- df |>
-    filter(excess_time <= 0) |>
-    select(-next_hour_boundary, -time_until_next_hour, -excess_time)
+    filter(excess_time <= 0) 
+  overflow_df <- df |>
+    filter(excess_time > 0)
 
-  current <- df |> filter(excess_time > 0)
+  current <- overflow_df
 
   while (TRUE) {
+
     # +1 ensures ceiling_date moves forward even when event_start is on the
     # hour boundary (ceiling_date of an exact boundary returns the same time)
     current <- current |>
       mutate(
         next_hour_boundary   = ceiling_date(event_start + 1, "hour"),
         time_until_next_hour = as.numeric(next_hour_boundary - event_start),
-        excess_time          = active_duration - time_until_next_hour,
-        active_duration      = as.numeric(time_until_next_hour)
-      )
+        excess_time          = active_duration - time_until_next_hour)
+        
+    #for all rows, set active_duration to remaining time in the hour
+    current = current %>%
+      mutate(active_duration = case_when(
+        as.numeric(excess_time) > 0 ~ as.numeric(time_until_next_hour),
+        TRUE ~ as.numeric(active_duration)
+      ))
 
-    overflow_rows <- current |>
-      filter(excess_time > 0) |>
-      mutate(
-        event_start     = next_hour_boundary,
-        active_duration = as.numeric(excess_time)
-      )
-
-    current <- current |>
-      select(-next_hour_boundary, -time_until_next_hour, -excess_time)
-
-    if (nrow(overflow_rows) == 0) break
-
-    overflow_rows <- overflow_rows |>
-      select(-next_hour_boundary, -time_until_next_hour, -excess_time)
-
-    current <- bind_rows(current, overflow_rows)
+    overflow_rows = current %>% 
+      filter(excess_time > 0)
+    
+    if (nrow(overflow_rows) == 0) break 
+    
+    #we will now change the rows such that they become next hour and set active duration as excess time
+    overflow_rows = overflow_rows %>% 
+      mutate(event_start = next_hour_boundary,
+             active_duration = as.numeric(excess_time))
+    
+    overflow_df = current %>% bind_rows(overflow_rows)
+    current = overflow_df
   }
 
-  bind_rows(no_overflow, current) |>
+  bind_rows(no_overflow, overflow_df) |>
     mutate(hour = hour(event_start))
 }
 
-apps_tod     <- split_by_hour(apps_clean)
-websites_tod <- split_by_hour(websites_clean)
+apps_tod     <- split_by_hour(apps_clean) %>% 
+  select(-next_hour_boundary, -time_until_next_hour, -excess_time)
+websites_tod <- split_by_hour(websites_clean) %>% 
+  select(-next_hour_boundary, -time_until_next_hour, -excess_time)
+
 
 # --- 7. Save -----------------------------------------------------------------
 
 dir.create("data", showWarnings = FALSE)
-#saveRDS(apps_clean,     "data/apps_clean.rds")
-#saveRDS(websites_clean, "data/websites_clean.rds")
-saveRDS(apps_tod,       "data/apps_clean.rds")
-saveRDS(websites_tod,   "data/websites_clean.rds")
+saveRDS(apps_tod,     "data/apps_clean.rds")
+saveRDS(websites_tod,  "data/websites_clean.rds")
 
 message(
-  "Done. Saved ", nrow(apps_clean), " app events and ",
-  nrow(websites_clean), " website events.\n",
   "ToD files: ", nrow(apps_tod), " app rows and ",
   nrow(websites_tod), " website rows after hour splitting."
 )
