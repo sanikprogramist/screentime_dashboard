@@ -239,7 +239,7 @@ websites_tod <- split_by_hour(websites_clean) %>%
 # --- 7. Save -----------------------------------------------------------------
 
 dir.create("data", showWarnings = FALSE)
-saveRDS(apps_tod,     "data/apps_clean.rds")
+saveRDS(apps_tod,     "data/apps_clean.rds") 
 saveRDS(websites_tod,  "data/websites_clean.rds")
 
 message(

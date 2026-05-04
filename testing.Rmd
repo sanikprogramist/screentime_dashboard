@@ -84,88 +84,51 @@ total_time_apps %>% group_by(category) %>%
 ```{r}
 apps = readRDS("data/apps_clean.rds")
 
-apps = apps %>% 
-    mutate(next_hour_boundary = ceiling_date(event_start, "hour"), 
-           time_until_next_hour = next_hour_boundary - event_start, 
-           excess_time = active_duration - time_until_next_hour) 
+dotw_counts = apps %>%
+  mutate(day  = floor_date(event_start, "day"),
+         dotw = wday(event_start, label = TRUE)) %>%
+  distinct(day, dotw) %>%
+  count(dotw, name = "n_days")
 
-overflow = apps %>% 
-  filter(excess_time>0)
-no_overflow = apps %>% 
-  filter(excess_time <=0)
-  
-current = overflow
-while (TRUE){
-  
-  #calculate excess time
-  current = current %>% 
-    mutate(next_hour_boundary = ceiling_date((event_start+1), "hour"), 
-           time_until_next_hour = next_hour_boundary - event_start, 
-           excess_time = active_duration - time_until_next_hour)
-  
-  #for all rows, set active_duration to remaining time in the hour
-  current = current %>%
-  mutate(active_duration = case_when(
-    as.numeric(excess_time) > 0 ~ as.numeric(time_until_next_hour),
-    TRUE ~ as.numeric(active_duration)
-  ))
+test = apps %>%
+  mutate(
+    day  = floor_date(event_start, "day"),
+    dotw = wday(event_start, label = TRUE)
+  ) %>%
+  group_by(day, hour, dotw) %>%
+  summarise(hour_total = sum(active_duration), .groups = "drop") %>%
+  # NO per-day normalization — keep raw durations
+  group_by(hour, dotw) %>%
+  summarise(total = sum(hour_total), .groups = "drop") %>%
+  # Divide by number of that weekday in the data
+  left_join(dotw_counts, by = "dotw") %>%
+  mutate(mean_duration = total / n_days) %>%
+  complete(hour = 0:23, dotw, fill = list(mean_duration = 0))
 
-  
-  #however, there is excess time. so we create a new data_frame, which will be tagged on to current:
-  excess_time = current %>% 
-    filter(excess_time > 0)
-  
-  if (nrow(excess_time) == 0) break 
+test %>%
+  ggplot(aes(x = hour, y = dotw, height = mean_duration, fill = dotw)) +
+  geom_density_ridges(stat = "identity", scale = 2.5, alpha = 0.8) +
+  scale_x_continuous(breaks = seq(0, 23, 3),
+                     labels = \(x) sprintf("%02d:00", x)) +
+  scale_fill_viridis_d(option = "magma", guide = "none") +
+  labs(x = NULL, y = NULL,
+       title = "App usage across the day",
+       subtitle = "Mean duration per hour (seconds)") +
+  theme_classic()
 
-  #we will now change the rows such that they become next hour and set active duration as excess time
-  excess_time = excess_time %>% 
-    mutate(event_start = next_hour_boundary,
-           active_duration = as.numeric(excess_time))
-  
-  overflow = current %>% bind_rows(excess_time)
-  current = overflow
-}
+library(plotly)
 
-apps2 = no_overflow %>% bind_rows(overflow)
+p = test %>%
+  ggplot(aes(x = hour, y = dotw, height = mean_duration, fill = dotw)) +
+  geom_density_ridges(stat = "identity", scale = 3, alpha = 0.7) +
+  scale_x_continuous(breaks = seq(0, 23, 3),
+                     labels = \(x) sprintf("%02d:00", x)) +
+  scale_fill_viridis_d(option = "magma", guide = "none") +
+  labs(x = NULL, y = NULL,
+       title = "App usage across the day",
+       subtitle = "Mean duration per hour") +
+  theme_classic()
 
-apps2 %>% mutate(week = floor_date(event_start, "week")) %>% 
-  group_by(week) %>% 
-  summarise(sum(active_duration))
-
-apps %>% mutate(week = floor_date(event_start, "week")) %>% 
-  group_by(week) %>% 
-  summarise(sum(active_duration))
-
+ggplotly(p)
 ```
-
-```{r}
-websites_clean %>% mutate(week = floor_date(event_start, "week")) %>% 
-  group_by(week) %>% 
-  summarise(sum(active_duration))
-
-websites_tod %>% mutate(week = floor_date(event_start, "week")) %>% 
-  group_by(week) %>% 
-  summarise(sum(active_duration))
-```
-```{r}
-apps = readRDS("data/apps_clean.rds")
-apps %>% mutate(week = floor_date(event_start, "week")) %>% 
-  group_by(week,category) %>% summarise(total_duration = sum(active_duration)/3600) %>% 
-  filter(category=="Browser") %>% 
-  pull(total_duration)
-
-apps %>%
-  mutate(week = floor_date(event_start, "week", week_start = 1)) %>%
-  group_by(week, category) %>%
-  summarise(total_duration = sum(active_duration) / 3600) %>%
-  filter(category == "Browser") %>%
-  pull(total_duration)
-
-
-
-
-
-
-```
-
 
