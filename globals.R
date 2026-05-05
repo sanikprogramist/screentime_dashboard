@@ -18,10 +18,8 @@ apps     <- readRDS("data/apps_clean.rds")
 websites <- readRDS("data/websites_clean.rds")
 
 # --- Constants ----------------------------------------------------------------
-MIN_HOURS       <- 1
-OTHER_COLOR     <- "#6c757d"
-PRODUCTIVE_APPS <- c("Browser", "Development", "Communication", "Productivity", "OS & System")
-PRODUCTIVE_WEB  <- c("Learning", "Documentation", "Work", "Development", "Utilities")
+MIN_HOURS   <- 1
+OTHER_COLOR <- "#6c757d"
 
 # --- Category lists -----------------------------------------------------------
 app_cats <- apps |>
@@ -164,30 +162,7 @@ intro_email_weekly <- websites |>
   summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
   pull(hrs) |> mean() |> round(1)
 
-intro_social_ent <- local({
-  se <- websites |>
-    filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
-    mutate(week = floor_date(event_start, "week", week_start = 1)) |>
-    group_by(week) |>
-    summarise(hours = sum(active_duration) / 3600, .groups = "drop")
-  list(
-    first2 = round(mean(slice_head(se, n = 2)$hours), 1),
-    last2  = round(mean(slice_tail(se, n = 2)$hours), 1)
-  )
-})
 
-# --- Helper functions ---------------------------------------------------------
-
-# Recodes anything outside the top N categories as "Other".
-# Factor levels = top cats in rank order + "Other" (biggest at bottom in ggplot).
-apply_top_n <- function(df, cat_ranking, n) {
-  top_cats <- cat_ranking[seq_len(n)]
-  df |>
-    mutate(
-      category = if_else(category %in% top_cats, category, "Other"),
-      category = factor(category, levels = c(top_cats, "Other"))
-    )
-}
 
 # --- Theme & styling ----------------------------------------------------------
 app_theme <- bs_theme(

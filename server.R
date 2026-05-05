@@ -67,9 +67,9 @@ server <- function(input, output, session) {
       mutate(week = floor_date(event_start, "week")) |>
       group_by(week) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop")
-    last4_avg <- round(mean(tail(weekly$total, 4)), 1)
+    last4_avg  <- round(mean(tail(weekly$total, 4)), 1)
     first4_avg <- round(mean(head(weekly$total, 4)), 1)
-    pct <- round((last4_avg - first4_avg) / first4_avg * 100, 0)
+    pct        <- round((last4_avg - first4_avg) / first4_avg * 100, 0)
     trend_txt <- if (pct < 0)
       paste0("down ", abs(pct), "% from the first four weeks")
     else
