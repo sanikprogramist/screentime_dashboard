@@ -166,7 +166,7 @@ ui <- page_navbar(
         card(
           full_screen = TRUE,
           card_header("App Usage Over Time"),
-          card_body(plotlyOutput("chart_apps", height = "400px")),
+          card_body(plotlyOutput("chart_apps", height = "450px")),
           card_footer(
             div(
               style = "display:flex; gap:2.5rem; flex-wrap:wrap; align-items:flex-start;",
@@ -215,36 +215,40 @@ ui <- page_navbar(
       ),
       div(
         class = "metrics-row",
+        style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
         div(
           class = "metric-card",
-          div(class = "metric-label", "⏰ Peak Usage Hour"),
-          div(class = "metric-value", sprintf("%02d:00", tod_peak_hour)),
-          div(class = "metric-subtitle", span("Most active hour across all days"))
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "⏰ Peak Usage Hour"),
+          div(class = "metric-value", style = "font-size: 1.3rem;", sprintf("%02d:00", tod_peak_hour)),
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Most active hour across all days"))
         ),
         div(
           class = "metric-card",
-          div(class = "metric-label", "📅 Busiest Day"),
-          div(class = "metric-value", style = "font-size: 1.6rem;", tod_busiest_day),
-          div(class = "metric-subtitle", span("Highest average daily screen time"))
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "📅 Busiest Day"),
+          div(class = "metric-value", style = "font-size: 1.3rem;", tod_busiest_day),
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Highest average daily screen time"))
         ),
         div(
           class = "metric-card",
-          div(class = "metric-label", "⚖️ Weekday vs Weekend"),
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "⚖️ Weekday vs Weekend"),
           div(
-            class = "metric-value", style = "font-size: 1.6rem;",
+            class = "metric-value", style = "font-size: 1.3rem;",
             paste0(
               tod_wk_vs_we$avg[!tod_wk_vs_we$is_weekend], "h",
               " · ",
               tod_wk_vs_we$avg[tod_wk_vs_we$is_weekend], "h"
             )
           ),
-          div(class = "metric-subtitle", span("Avg daily usage · weekdays vs weekends"))
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Weekdays vs weekends"))
         )
       ),
       card(
         full_screen = TRUE,
         card_header("App Usage by Hour of Day"),
-        plotlyOutput("chart_tod", height = "500px")
+        plotlyOutput("chart_tod", height = "450px")
       )
     )
   ),
@@ -271,9 +275,7 @@ ui <- page_navbar(
             class = "metric-card",
             style = "padding: 1rem;",
             div(class = "metric-label", style = "font-size: 0.75rem;", "🏆 Top Domain"),
-            div(class = "metric-value", style = "font-size: 0.95rem; word-break: break-word;",
-                uiOutput("metric_web_top_domain")),
-            div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Most visited"))
+            uiOutput("metric_web_top_domain")
           ),
           div(
             class = "metric-card",
@@ -293,7 +295,7 @@ ui <- page_navbar(
         card(
           full_screen = TRUE,
           card_header("Website Usage Over Time"),
-          card_body(plotlyOutput("chart_web", height = "600px")),
+          card_body(plotlyOutput("chart_web", height = "450px")),
           card_footer(
             div(
               style = "display:flex; gap:2.5rem; flex-wrap:wrap; align-items:flex-start;",

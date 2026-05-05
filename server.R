@@ -332,9 +332,12 @@ server <- function(input, output, session) {
       group_by(domain) |>
       summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
       slice_max(hours, n = 1)
-    HTML(paste0(top$domain,
-                "<br><small style='color:#9ca3af;font-size:0.75rem'>",
-                round(top$hours, 0), "h total</small>"))
+    tagList(
+      div(style = "font-size:1.3rem; font-weight:700; font-family:'Courier New',monospace;
+                   color:#f3f4f6; word-break:break-word;", top$domain),
+      div(style = "font-size:0.7rem; color:#6b7280; margin-top:0.35rem;",
+          paste0(round(top$hours, 0), "h total"))
+    )
   })
 
   output$metric_web_ai <- renderUI({
