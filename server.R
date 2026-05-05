@@ -1,4 +1,5 @@
 # server.R
+if (!exists("app_theme")) source("globals.R")
 
 server <- function(input, output, session) {
 
@@ -46,12 +47,56 @@ server <- function(input, output, session) {
       scale_y_continuous(limits = c(0, max_y_apps[[input$period_apps]]), expand = c(0, 0)) +
       scale_x_datetime(date_labels = date_fmt) +
       chart_theme() +
-      labs(x = NULL, y = "Hours")
+      labs(x = NULL, y = "Hours", fill = NULL)
 
     ggplotly(p, tooltip = "text") |>
       apply_dark_layout() %>%
       htmlwidgets::onRender(bar_highlight_js) |>
       config(displayModeBar = FALSE)
+  })
+
+  # --- Apps sidebar story ---
+
+  output$sidebar_apps_story <- renderUI({
+    n_weeks  <- apps |>
+      mutate(week = floor_date(event_start, "week")) |>
+      pull(week) |> n_distinct()
+    avg_all  <- round(sum(apps$active_duration) / 3600 / n_weeks, 0)
+
+    weekly <- apps |>
+      mutate(week = floor_date(event_start, "week")) |>
+      group_by(week) |>
+      summarise(total = sum(active_duration) / 3600, .groups = "drop")
+    last4_avg <- round(mean(tail(weekly$total, 4)), 1)
+    first4_avg <- round(mean(head(weekly$total, 4)), 1)
+    pct <- round((last4_avg - first4_avg) / first4_avg * 100, 0)
+    trend_txt <- if (pct < 0)
+      paste0("down ", abs(pct), "% from the first four weeks")
+    else
+      paste0("up ", pct, "% from the first four weeks")
+
+    gaming_last4 <- apps |>
+      mutate(week = floor_date(event_start, "week")) |>
+      group_by(week, category) |>
+      summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
+      complete(week, category, fill = list(total = 0)) |>
+      filter(category == "Gaming") |>
+      tail(4) |>
+      pull(total) |> mean() |> round(1)
+
+    HTML(paste0(
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
+      "This dashboard tracks 13 weeks of continuous activity data (February to May 2026), ",
+      "averaging <strong style='color:#f3f4f6;'>",
+      avg_all, "h</strong> of screen time per week. ",
+      "The most recent four weeks show <strong style='color:#f3f4f6;'>",
+      last4_avg, "h</strong> weekly — ", trend_txt, ".",
+      "</p>",
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0;'>",
+      "Gaming time has changed significantly over the tracking period, ",
+      "averaging <strong style='color:#f3f4f6;'>", gaming_last4, "h</strong> per week in the most recent four weeks.",
+      "</p>"
+    ))
   })
 
   # --- Apps metrics ---
@@ -150,7 +195,7 @@ server <- function(input, output, session) {
         name = days[i],
         text = d$tooltip,
         hoverinfo = "text",
-        showlegend = TRUE
+        showlegend = FALSE
       )
     }
 
@@ -224,12 +269,59 @@ server <- function(input, output, session) {
       scale_y_continuous(limits = c(0, max_y_web[[input$period_web]]), expand = c(0, 0)) +
       scale_x_datetime(date_labels = date_fmt) +
       chart_theme() +
-      labs(x = NULL, y = "Hours")
+      labs(x = NULL, y = "Hours", fill = NULL)
 
     ggplotly(p, tooltip = "text") |>
       apply_dark_layout() %>%
       htmlwidgets::onRender(bar_highlight_js) |>
       config(displayModeBar = FALSE)
+  })
+
+  # --- Websites sidebar story ---
+
+  output$sidebar_web_story <- renderUI({
+    top <- websites |>
+      filter(!is.na(domain)) |>
+      group_by(domain) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      slice_max(hours, n = 1)
+
+    ai_weekly <- websites |>
+      filter(category == "AI Tools") |>
+      mutate(week = floor_date(event_start, "week")) |>
+      group_by(week) |>
+      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+      pull(hrs) |> mean() |> round(1)
+
+    n_domains <- websites |> filter(!is.na(domain)) |> pull(domain) |> n_distinct()
+
+    # Social media + entertainment trend
+    se_trend <- websites |>
+      filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
+      mutate(week = floor_date(event_start, "week")) |>
+      group_by(week) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop")
+    se_first2 <- mean(slice_head(se_trend, n = 2)$hours) |> round(1)
+    se_last2 <- mean(slice_tail(se_trend, n = 2)$hours) |> round(1)
+
+    HTML(paste0(
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
+      "<strong style='color:#f3f4f6;'>", top$domain, "</strong> is the most visited domain overall, ",
+      "accounting for <strong style='color:#f3f4f6;'>", round(top$hours, 0), "h</strong> of total tracked time. ",
+      "In total, <strong style='color:#f3f4f6;'>",
+      n_domains, "</strong> unique domains appear in the data.",
+      "</p>",
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
+      "AI tools (claude.ai, chatgpt.com) average <strong style='color:#f3f4f6;'>",
+      ai_weekly, "h/wk</strong>, representing an emerging category of development-focused tools.",
+      "</p>",
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0;'>",
+      "<span style='color:#ef4444;'>⚠️ Emerging concern:</span> social media and entertainment time has spiked dramatically. ",
+      "The first two weeks averaged <strong style='color:#f3f4f6;'>", se_first2, "h/wk</strong>, ",
+      "but the last two weeks jumped to <strong style='color:#f3f4f6;'>", se_last2, "h/wk</strong>. ",
+      "This dashboard helped identify the problem — next step is to reduce it.",
+      "</p>"
+    ))
   })
 
   # --- Website metrics ---

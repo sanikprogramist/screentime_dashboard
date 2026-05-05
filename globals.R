@@ -121,6 +121,61 @@ tod_wk_vs_we <- apps |>
   group_by(is_weekend) |>
   summarise(avg = round(mean(day_hours), 1))
 
+# --- Intro tab precomputed stats ----------------------------------------------
+intro_n_weeks <- apps |>
+  mutate(w = floor_date(event_start, "week", week_start = 1)) |>
+  pull(w) |> n_distinct()
+
+intro_total_hours <- round(sum(apps$active_duration) / 3600, 0)
+
+intro_date_from <- format(min(apps$event_start), "%b %Y")
+intro_date_to   <- format(max(apps$event_start), "%b %Y")
+
+intro_gaming_drop <- local({
+  gw <- apps |>
+    mutate(week = floor_date(event_start, "week", week_start = 1)) |>
+    group_by(week, category) |>
+    summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+    complete(week, category, fill = list(hours = 0)) |>
+    filter(category == "Gaming") |>
+    arrange(week)
+  pct <- (mean(tail(gw$hours, 4)) - mean(head(gw$hours, 4))) / mean(head(gw$hours, 4)) * 100
+  round(abs(pct), 0)
+})
+
+intro_ai_weekly <- websites |>
+  filter(category == "AI Tools") |>
+  mutate(week = floor_date(event_start, "week", week_start = 1)) |>
+  group_by(week) |>
+  summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+  pull(hrs) |> mean() |> round(1)
+
+intro_top_domain <- websites |>
+  filter(!is.na(domain)) |>
+  group_by(domain) |>
+  summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+  slice_max(hours, n = 1) |>
+  pull(domain)
+
+intro_email_weekly <- websites |>
+  filter(category == "Communication") |>
+  mutate(week = floor_date(event_start, "week", week_start = 1)) |>
+  group_by(week) |>
+  summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+  pull(hrs) |> mean() |> round(1)
+
+intro_social_ent <- local({
+  se <- websites |>
+    filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
+    mutate(week = floor_date(event_start, "week", week_start = 1)) |>
+    group_by(week) |>
+    summarise(hours = sum(active_duration) / 3600, .groups = "drop")
+  list(
+    first2 = round(mean(slice_head(se, n = 2)$hours), 1),
+    last2  = round(mean(slice_tail(se, n = 2)$hours), 1)
+  )
+})
+
 # --- Helper functions ---------------------------------------------------------
 
 # Recodes anything outside the top N categories as "Other".
@@ -189,6 +244,110 @@ app_theme <- bs_theme(
     }
     .metric-trend          { font-weight: 600; color: #10b981; }
     .metric-trend.negative { color: #ef4444; }
+
+    /* --- About tab --------------------------------------------------------- */
+    .intro-hero {
+      background: linear-gradient(135deg, #1a1f35 0%, #0f1117 100%);
+      border: 1px solid #374151;
+      border-left: 4px solid #6366f1;
+      border-radius: 0.75rem;
+      padding: 2.5rem;
+      margin-bottom: 2rem;
+    }
+    .intro-hero h1 {
+      color: #f3f4f6;
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+    }
+    .intro-hero .hero-sub {
+      color: #9ca3af;
+      font-size: 1rem;
+      line-height: 1.6;
+      margin: 0 0 1.25rem;
+      max-width: 680px;
+    }
+    .hero-pill {
+      display: inline-block;
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #9ca3af;
+      font-size: 0.78rem;
+      padding: 0.25rem 0.8rem;
+      border-radius: 9999px;
+      font-family: 'Courier New', monospace;
+      margin-right: 0.5rem;
+    }
+    .insight-value {
+      font-size: 2.4rem;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+      color: #6366f1;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+    .insight-value.green { color: #10b981; }
+    .insight-label {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+    }
+    .insight-note {
+      font-size: 0.82rem;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    .tech-badge {
+      display: inline-block;
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #d1d5db;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 0.4rem;
+      margin: 0.2rem 0.2rem 0.2rem 0;
+      font-weight: 500;
+    }
+    .tech-badge.primary {
+      border-color: #6366f1;
+      color: #a5b4fc;
+      background: #1e1f3a;
+    }
+    .about-body {
+      color: #d1d5db;
+      font-size: 0.9rem;
+      line-height: 1.75;
+    }
+    .about-body strong { color: #f3f4f6; }
+
+    /* --- Navbar / tab styling ------------------------------------------------ */
+    .navbar .nav-link {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #9ca3af !important;
+      padding: 0.75rem 1.5rem !important;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all 0.25s ease;
+    }
+    .navbar .nav-link:hover {
+      color: #f3f4f6 !important;
+    }
+    .navbar .nav-link.active {
+      color: #6366f1 !important;
+      border-bottom: 3px solid #6366f1;
+      background: transparent;
+    }
+    .navbar-brand {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #f3f4f6 !important;
+      letter-spacing: 0.05em;
+      margin-right: 2rem;
+    }
   ")
 
 # Reusable ggplot theme layer
@@ -204,7 +363,7 @@ chart_theme <- function() {
         axis.text          = element_text(color = "#aaaaaa"),
         axis.title.y       = element_text(color = "#aaaaaa", margin = margin(r = 10)),
         legend.background  = element_rect(fill = "transparent", color = NA),
-        legend.text        = element_text(color = "#fcfcfc"),
+        legend.text        = element_blank(),
         legend.title       = element_blank()
       )
   )
