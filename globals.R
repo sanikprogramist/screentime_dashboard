@@ -72,14 +72,14 @@ max_y_web  <- make_max_y(websites)
 # --- Precomputed Time of Day data ---------------------------------------------
 dotw_counts <- apps |>
   mutate(day  = floor_date(event_start, "day"),
-         dotw = wday(event_start, label = TRUE, week_start = 1)) |>
+         dotw = lubridate::wday(event_start, label = TRUE, week_start = 1)) |>
   distinct(day, dotw) |>
   count(dotw, name = "n_days")
 
 ridge_data <- apps |>
   mutate(
     day  = floor_date(event_start, "day"),
-    dotw = wday(event_start, label = TRUE, week_start = 1)
+    dotw = lubridate::wday(event_start, label = TRUE, week_start = 1)
   ) |>
   group_by(day, hour, dotw) |>
   summarise(hour_total = sum(active_duration), .groups = "drop") |>
@@ -112,12 +112,65 @@ tod_busiest_day <- ridge_data |>
 tod_wk_vs_we <- apps |>
   mutate(
     day        = floor_date(event_start, "day"),
-    is_weekend = wday(event_start, week_start = 1) >= 6
+    is_weekend = lubridate::wday(event_start, week_start = 1) >= 6
   ) |>
   group_by(day, is_weekend) |>
   summarise(day_hours = sum(active_duration) / 3600, .groups = "drop") |>
   group_by(is_weekend) |>
   summarise(avg = round(mean(day_hours), 1))
+
+# --- Business Hours Productivity precomputed data ----------------------------
+productive_app_cats <- c("Learning & Education", "Development & Programming",
+                         "Productivity & Work", "Art & Creative")
+productive_web_cats <- c("Communication", "Reference & Research", "Productivity & Work",
+                         "Development & Programming", "Learning & Education", "Job Search",
+                         "AI Tools", "Science & Academia", "Government & Administration")
+
+bh_apps <- apps |>
+  mutate(productive = category %in% productive_app_cats) |>
+  filter(category != "Browser")
+
+bh_websites <- websites |>
+  mutate(productive = category %in% productive_web_cats)
+
+business_hours <- bind_rows(
+  select(bh_apps,     event_start, active_duration, category, productive),
+  select(bh_websites, event_start, active_duration, category, productive)
+) |>
+  mutate(weekday_num = lubridate::wday(event_start, week_start = 1)) |>
+  filter(hour(event_start) > 6, hour(event_start) < 17,
+         weekday_num >= 1, weekday_num <= 5)
+
+weekly_business <- business_hours |>
+  group_by(week = floor_date(event_start, "week", week_start = 1), productive) |>
+  summarise(total_time = sum(active_duration) / 3600, .groups = "drop") |>
+  pivot_wider(names_from = productive, values_from = total_time, values_fill = 0) |>
+  rename(unproductive = `FALSE`, productive = `TRUE`) |>
+  mutate(
+    total             = productive + unproductive,
+    productivity_ratio = round(productive / total * 100, 1)
+  )
+
+category_business <- business_hours |>
+  group_by(category, productive) |>
+  summarise(hours = sum(active_duration) / 3600, sessions = n(), .groups = "drop") |>
+  mutate(category = if_else(is.na(category), "Misc", category))
+
+top_drains_business <- category_business |>
+  filter(!productive) |>
+  arrange(desc(hours)) |>
+  head(8)
+
+productive_business <- category_business |>
+  filter(productive) |>
+  arrange(desc(hours)) |>
+  head(8)
+
+prod_rate       <- round(sum(weekly_business$productive) /
+                           sum(weekly_business$total) * 100, 1)
+prod_hrs_weekly <- round(mean(weekly_business$productive), 1)
+top_drain_cat   <- top_drains_business$category[[1]]
+top_drain_hrs   <- round(top_drains_business$hours[[1]], 1)
 
 # --- Intro tab precomputed stats ----------------------------------------------
 intro_n_weeks <- apps |>

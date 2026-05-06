@@ -129,13 +129,14 @@ websites_clean <- websites_clean |>
     event_start = with_tz(event_start, local_tz),
     event_end   = with_tz(event_end,   local_tz)
   ) |>
+  filter(!is.na(domain)) |>
   select(event_start, event_end, active_duration, domain, title)
 
 # --- 5. Categorisation -------------------------------------------------------
-# Give top 100 domains and all apps categories using LLMs
+# Give top 250 domains and all apps categories using LLMs
 library(tidyverse)
 
-# Top 100 domains with hours + a few sample titles for LLM context
+# Top 250 domains with hours + a few sample titles for LLM context
 domains_template <- websites_clean |>
   group_by(name = domain) |>
   summarise(
@@ -144,7 +145,7 @@ domains_template <- websites_clean |>
     .groups = "drop"
   ) |>
   arrange(desc(hours)) |>
-  slice_head(n = 100) |>
+  slice_head(n = 250) |>
   mutate(type = "website", category = "")
 
 # All apps with hours + sample titles

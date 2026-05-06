@@ -225,6 +225,78 @@ server <- function(input, output, session) {
   })
 
   # ===========================================================================
+  # PRODUCTIVITY TAB
+  # ===========================================================================
+
+  output$chart_prod_weekly <- renderPlotly({
+    df <- weekly_business |>
+      arrange(week) |>
+      pivot_longer(c(productive, unproductive), names_to = "type", values_to = "hours") |>
+      mutate(type = factor(str_to_title(type), levels = c("Unproductive", "Productive")))
+
+    p = ggplot(df, aes(x = week, y = hours)) +
+      geom_area(aes(fill = type, color = type),position = "identity", alpha = 0.7) +
+      geom_line(aes(y = total), color = "gray50", linetype = "dashed") +
+      geom_vline(xintercept= floor_date(ymd("2026-03-23"), "week", week_start=1), linetype = "dashed", color = "red") +
+      scale_fill_manual(values  = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
+      scale_color_manual(values = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
+      scale_x_datetime(date_labels = "%b %d") +
+      chart_theme() +
+      theme(legend.position = "bottom") +
+      labs(x = NULL, y = "Hours", fill = NULL, color = NULL)
+
+    ggplotly(p, tooltip=NULL) |>
+      apply_dark_layout() |>
+      config(displayModeBar = FALSE)
+  })
+
+  output$chart_prod_drains <- renderPlotly({
+    drain_colors <- setNames(
+      tableau_20[seq_len(nrow(top_drains_business))],
+      top_drains_business$category
+    )
+
+    p <- ggplot(top_drains_business,
+                aes(x = hours, y = reorder(category, hours),
+                    fill = category,
+                    text = paste0("<b>", category, "</b><br>", round(hours, 1), "h"))) +
+      geom_col(show.legend = FALSE) +
+      scale_fill_manual(values = drain_colors) +
+      scale_x_continuous(expand = c(0, 0, 0.05, 0)) +
+      chart_theme() +
+      theme(legend.position = "none",
+            axis.title.x = element_text(color = "white")) +
+      labs(x = "Hours", y = NULL)
+
+    ggplotly(p, tooltip = "text") |>
+      apply_dark_layout() |>
+      config(displayModeBar = FALSE)
+  })
+
+  output$chart_prod_sources <- renderPlotly({
+    src_colors <- setNames(
+      tableau_20[seq_len(nrow(productive_business))],
+      productive_business$category
+    )
+
+    p <- ggplot(productive_business,
+                aes(x = hours, y = reorder(category, hours),
+                    fill = category,
+                    text = paste0("<b>", category, "</b><br>", round(hours, 1), "h"))) +
+      geom_col(show.legend = FALSE) +
+      scale_fill_manual(values = src_colors) +
+      scale_x_continuous(expand = c(0, 0, 0.05, 0)) +
+      chart_theme() +
+      theme(legend.position = "none",
+            axis.title.x = element_text(color = "white")) +
+      labs(x = "Hours", y = NULL)
+
+    ggplotly(p, tooltip = "text") |>
+      apply_dark_layout() |>
+      config(displayModeBar = FALSE)
+  })
+
+  # ===========================================================================
   # WEBSITES TAB
   # ===========================================================================
 

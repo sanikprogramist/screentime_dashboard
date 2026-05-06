@@ -86,14 +86,14 @@ apps = readRDS("data/apps_clean.rds")
 
 dotw_counts = apps %>%
   mutate(day  = floor_date(event_start, "day"),
-         dotw = wday(event_start, label = TRUE)) %>%
+         dotw = lubridate::wday(event_start, label = TRUE)) %>%
   distinct(day, dotw) %>%
   count(dotw, name = "n_days")
 
 test = apps %>%
   mutate(
     day  = floor_date(event_start, "day"),
-    dotw = wday(event_start, label = TRUE)
+    dotw = lubridate::wday(event_start, label = TRUE)
   ) %>%
   group_by(day, hour, dotw) %>%
   summarise(hour_total = sum(active_duration), .groups = "drop") %>%
@@ -130,5 +130,204 @@ p = test %>%
   theme_classic()
 
 ggplotly(p)
+```
+
+
+# Business Hours Productivity Analysis
+
+Analyzing laptop usage during business hours only (weekdays, 9 AM - 5 PM) provides a clearer picture than all-time statistics, which conflate necessary downtime with actual work distractions.
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+
+apps = readRDS("data/apps_clean.rds")
+
+websites = readRDS("data/websites_clean.rds")
+
+productive_categories = c("Learning & Education", "Development & Programming", "Productivity & Work", "Art & Creative")
+productive_web_categories = c("Communication", "Reference & Research", "Productivity & Work", "Development & Programming", "Learning & Education", "Job Search", "AI Tools", "Science & Academia", "Government & Administration")
+
+apps = apps %>% 
+  mutate(productive = case_when(category %in% productive_categories ~ TRUE, TRUE ~ FALSE)) %>% 
+  filter(category != "Browser") %>% #since browser is already counted in websites
+  select(-app)
+
+websites = websites %>% 
+  mutate(productive = case_when(category %in% productive_web_categories ~ TRUE, TRUE ~ FALSE)) %>% 
+  select(-domain)
+
+# Filter to business hours: weekdays before 5 PM
+business_hours = apps %>% 
+  bind_rows(websites) %>%
+  mutate(
+    weekday_num = lubridate::wday(event_start, week_start=1)
+  ) %>%
+  filter(
+    hour < 17,
+    weekday_num >= 1 & weekday_num <= 5
+  ) %>% 
+  filter(hour > 6)
+
+# Weekly aggregation
+weekly_business = business_hours %>%
+  group_by(week = floor_date(event_start, "week", week_start=1), productive) %>%
+  summarise(total_time = sum(active_duration) / 3600, .groups = "drop") %>%
+  pivot_wider(names_from = productive, values_from = total_time, values_fill = 0) %>%
+  rename(unproductive = `FALSE`, productive = `TRUE`) %>%
+  mutate(
+    total = productive + unproductive,
+    productivity_ratio = round(productive / total * 100, 1)
+  )
+
+weekly_business %>%
+  ggplot(aes(x = week)) +
+  geom_area(aes(y = productive, fill = "Productive"), alpha = 0.75) +
+  geom_area(aes(y = unproductive, fill = "Unproductive"), alpha = 0.75) +
+  geom_line(aes(y = productive + unproductive), color = "black", size = 0.3, alpha = 0.5) +
+  scale_fill_manual(values = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
+  labs(
+    title = "Business Hours Laptop Usage (Weekdays 9 AM - 5 PM)",
+    subtitle = "14-week period (Feb - May 2026)",
+    x = "Week Number",
+    y = "Hours",
+    fill = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 11, color = "gray40", margin = margin(b = 10)),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    panel.grid.major.x = element_blank()
+  )
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Summary stats
+business_hours %>%
+  group_by(productive) %>%
+  summarise(
+    total_hours = sum(active_duration) / 3600,
+    .groups = "drop"
+  )
+```
+
+
+## Key Metrics
+Important to note - I excluded stuff like "New Tab" in the browser, because i dont think thats productive or unproductive, but it was actually a significant part of the browser time apparently, like 20 hours over 3 months. Perhaps this is an issue with how ActivityWatch records data.
+
+During business hours, **56.7% of laptop time is productive**, with the following breakdown:
+
+Also important to note is that from April 1st, My part-time research assisstant contract ended, which impacted the productive time greatly.
+
+- **129.5 hours productive** across 14 weeks (~9.25 hours/week)
+- **98.5 hours unproductive** across 14 weeks (~7.04 hours/week)  
+
+## What Steals Your Focus
+
+```{r, warning=FALSE, message=FALSE}
+category_business = business_hours %>%
+  group_by(category, productive) %>%
+  summarise(hours = sum(active_duration) / 3600, sessions = n(), .groups = "drop") %>%
+  arrange(desc(hours)) %>% 
+  mutate(category = case_when(is.na(category)~"Misc (Domains below top 250)",
+                                TRUE ~ category))
+
+top_drains_business = category_business %>%
+  filter(productive == FALSE) %>%
+  arrange(desc(hours)) %>%
+  head(8)
+
+top_drains_business %>%
+  ggplot(aes(x = reorder(category, hours), y = hours, fill = category)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Business Hours Productivity Drains",
+    subtitle = "Unproductive activities during work hours (9 AM - 5 PM, weekdays)",
+    x = NULL,
+    y = "Hours"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 13, face = "bold", margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 10, color = "gray40", margin = margin(b = 10)),
+    axis.text.y = element_text(size = 10)
+  )
+```
+
+**The leverage point:** Entertainment & Leisure (25.7 hours) and Gaming (21.0 hours) account for **46.7 hours (39%)**(that needs to be recalculated) of unproductive work time. Eliminating these would boost your productivity ratio from 56.7% to approximately RECALCULATE%.
+
+Entertainment is the #1 drain during business hours, followed by gaming.
+
+## Where Productive Time Goes
+
+```{r, warning=FALSE, message=FALSE}
+productive_business = category_business %>%
+  filter(productive == TRUE) %>%
+  arrange(desc(hours)) %>%
+  head(8)
+
+productive_business %>%
+  ggplot(aes(x = reorder(category, hours), y = hours, fill = category)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Productive Activities During Business Hours",
+    subtitle = "What you spend work-hour time on when focused",
+    x = NULL,
+    y = "Hours"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 13, face = "bold", margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 10, color = "gray40", margin = margin(b = 10)),
+    axis.text.y = element_text(size = 10)
+  )
+```
+
+Productive work is concentrated in:
+- **Productivity & Work tools** (primary focus) - mainly made up of google docs - that was me writing scientific articles while I had a Research assisstant job
+- **Development & Programming** (strong presence)
+- **AI Tools** used for development and programming
+
+## Insights & Takeaways
+
+1. **Business hours performance is reasonable:** 49.7% productivity is a respectable baseline, not a crisis. RECALCULATE
+
+2. **Volatility is the real pattern:** Weeks range from 13.7% to 70.2%—the gap between bad and good weeks is huge. High-productivity weeks (60%+) are clearly achievable. RECALCULATE and 
+
+3. **Entertainment is the immediate target:** Many entertainment hours. WHile gaming has been largely eliminated, an alarming rise in social media and entertainment (mainly youtube.com) is driving an unproductivity surge.
+
+```{r}
+df <- weekly_business |>
+  arrange(week) |>
+  mutate(tooltip = paste0(
+    "<b>Week of ", format(week, "%b %d"), "</b><br>",
+    "Productive: ", round(productive, 1), "h<br>",
+    "Unproductive: ", round(unproductive, 1), "h<br>",
+    "Total: ", round(total, 1), "h  •  ", productivity_ratio, "% productive"
+  )) |>
+  pivot_longer(c(productive, unproductive), names_to = "type", values_to = "hours") |>
+  mutate(type = factor(str_to_title(type), levels = c("Unproductive", "Productive")))
+
+glimpse(df)
+head(df)
+
+ggplot(df, aes(x = week, y = hours, fill = type)) +
+  geom_area(position = "identity", alpha = 0.6)+
+  scale_fill_manual(values = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
+  scale_x_datetime(date_labels = "%b %d") +
+  #chart_theme() +
+  labs(x = NULL, y = "Hours")
+
+ggplotly(p, tooltip = "text") |>
+  apply_dark_layout() |>
+  config(displayModeBar = FALSE)
+
+
+
+
 ```
 

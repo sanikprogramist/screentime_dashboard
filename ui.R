@@ -253,6 +253,86 @@ ui <- page_navbar(
     )
   ),
 
+  # --- Productivity tab -------------------------------------------------------
+  nav_panel(
+    title = "Productivity",
+    layout_sidebar(
+      sidebar = sidebar(
+        width = 290,
+        h6("BUSINESS HOURS", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
+        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
+          "Filtering to ", tags$strong(style = "color:#f3f4f6;", "weekdays, 9 AM – 5 PM"),
+          " gives a cleaner picture of actual work habits, removing evenings and weekends."
+        ),
+        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
+          "Productive categories include Development, Learning, Productivity & Work, and AI Tools. ",
+          "Everything else is counted as unproductive."
+        ),
+        hr(style = "border-color:#374151; margin: 1rem 0;"),
+        p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
+          "Note: Browser time is counted via the Websites data to avoid double-counting. ",
+          "Tabs like 'New Tab' are excluded."
+        )
+      ),
+
+      div(
+        style = "display: flex; flex-direction: column; gap: 1.5rem;",
+
+        # --- Metrics row ---
+        div(
+          class = "metrics-row",
+          style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
+          div(
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "🎯 Productivity Rate"),
+            div(class = "metric-value", style = "font-size: 1.3rem;", paste0(prod_rate, "%")),
+            div(class = "metric-subtitle", style = "font-size: 0.7rem;", "% of business hours on productive tasks")
+          ),
+          div(
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "✅ Productive Hours / Week"),
+            div(class = "metric-value", style = "font-size: 1.3rem;", paste0(prod_hrs_weekly, "h")),
+            div(class = "metric-subtitle", style = "font-size: 0.7rem;",
+                paste0("Avg across ", nrow(weekly_business), " weeks"))
+          ),
+          div(
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "🚨 Top Productivity Drain"),
+            div(class = "metric-value", style = "font-size: 1.1rem; word-break: break-word;", top_drain_cat),
+            div(class = "metric-subtitle", style = "font-size: 0.7rem;",
+                paste0(top_drain_hrs, "h total during business hours"))
+          )
+        ),
+
+        # --- Chart 1: Weekly productive vs unproductive area chart ---
+        card(
+          full_screen = TRUE,
+          card_header("Business Hours Usage Over Time"),
+          card_body(plotlyOutput("chart_prod_weekly", height = "380px"))
+        ),
+
+        # --- Charts 2 & 3 side by side ---
+        layout_columns(
+          col_widths = c(6, 6),
+          gap = "1.5rem",
+          card(
+            full_screen = TRUE,
+            card_header("Top Productivity Drains"),
+            card_body(plotlyOutput("chart_prod_drains", height = "320px"))
+          ),
+          card(
+            full_screen = TRUE,
+            card_header("Where Productive Time Goes"),
+            card_body(plotlyOutput("chart_prod_sources", height = "320px"))
+          )
+        )
+      )
+    )
+  ),
+
   # --- Websites tab -----------------------------------------------------------
   nav_panel(
     title = "Websites",
