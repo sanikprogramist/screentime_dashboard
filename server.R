@@ -164,6 +164,147 @@ server <- function(input, output, session) {
       HTML(paste0('<span class="metric-trend negative">↑ ', round(pct, 0), '% vs first 4 weeks</span>'))
     }
   })
+  
+  # ===========================================================================
+  # WEBSITES TAB
+  # ===========================================================================
+  
+  # Reactive: aggregate web usage by period + display category, with top-3 domains
+  web_data <- reactive({
+    top_cats <- web_cats[seq_len(input$top_n_web)]
+    
+    enriched <- websites |>       
+      mutate(
+        period      = floor_date(event_start, input$period_web, week_start = 1),
+        display_cat = if_else(category %in% top_cats, category, "Other")
+      )
+    
+    top3 <- enriched |>
+      filter(!is.na(domain)) |>
+      group_by(period, display_cat, domain) |>
+      summarise(dom_hours = sum(active_duration) / 3600, .groups = "drop") |>
+      group_by(period, display_cat) |>
+      slice_max(dom_hours, n = 3, with_ties = FALSE) |>
+      mutate(dom_label = paste0(domain, " (", round(dom_hours, 1), "h)")) |>
+      summarise(top_domains = paste(dom_label, collapse = "<br>"), .groups = "drop")
+    
+    enriched |>
+      mutate(category = factor(display_cat, levels = c(top_cats, "Other"))) |>
+      group_by(period, category) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      left_join(top3, by = c("period", "category" = "display_cat")) |>
+      mutate(
+        tooltip = paste0(
+          "<b>", category, "</b>  ", round(hours, 1), "h<br>",
+          "<span style='color:#9ca3af'>", top_domains, "</span>"
+        )
+      )
+  })
+  
+  output$chart_web <- renderPlotly({
+    date_fmt <- if (input$period_web == "week") "%b %d" else "%b %Y"
+    
+    cat_order = web_data() %>% 
+      filter(category != "Other") %>% 
+      group_by(category) %>% 
+      summarise(s=sum(hours)) %>% 
+      arrange(s, desc=FALSE) %>%  
+      pull(category)
+    
+    cat_order = c("Other",cat_order)
+    
+    p <- ggplot(web_data(), aes(x = period, y = hours, 
+                                fill = factor(category, levels=cat_order), text = tooltip)) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(values = web_colors, drop = TRUE) +
+      scale_y_continuous(limits = c(0, max_y_web[[input$period_web]]), expand = c(0, 0)) +
+      scale_x_datetime(date_labels = date_fmt) +
+      chart_theme() +
+      labs(x = NULL, y = "Hours", fill = NULL)
+    
+    ggplotly(p, tooltip = "text") |>
+      apply_dark_layout() %>%
+      htmlwidgets::onRender(bar_highlight_js) |>
+      config(displayModeBar = FALSE)
+  })
+  
+  # --- Websites sidebar story ---
+  
+  output$sidebar_web_story <- renderUI({
+    top <- websites |>
+      filter(!is.na(domain)) |>
+      group_by(domain) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      slice_max(hours, n = 1)
+    
+    ai_weekly <- websites |>
+      filter(category == "AI Tools") |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
+      group_by(week) |>
+      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+      pull(hrs) |> mean() |> round(1)
+    
+    n_domains <- websites |> filter(!is.na(domain)) |> pull(domain) |> n_distinct()
+    
+    # Social media + entertainment trend
+    se_trend <- websites |>
+      filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
+      group_by(week) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop")
+    se_first2 <- mean(slice_head(se_trend, n = 2)$hours) |> round(1)
+    se_last2 <- mean(slice_tail(se_trend, n = 2)$hours) |> round(1)
+    
+    HTML(paste0(
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
+      "<strong style='color:#f3f4f6;'>", top$domain, "</strong> is the most visited domain overall, ",
+      "accounting for <strong style='color:#f3f4f6;'>", round(top$hours, 0), "h</strong> of total tracked time. ",
+      "In total, <strong style='color:#f3f4f6;'>",
+      n_domains, "</strong> unique domains appear in the data.",
+      "</p>",
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
+      "AI tools (claude.ai, chatgpt.com) average <strong style='color:#f3f4f6;'>",
+      ai_weekly, "h/wk</strong>, representing an emerging category of development-focused tools.",
+      "</p>",
+      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0;'>",
+      "<span style='color:#ef4444;'>⚠️ Emerging concern:</span> social media and entertainment time has spiked dramatically. ",
+      "The first two weeks averaged <strong style='color:#f3f4f6;'>", se_first2, "h/wk</strong>, ",
+      "but the last two weeks jumped to <strong style='color:#f3f4f6;'>", se_last2, "h/wk</strong>. ",
+      "This dashboard helped identify the problem — next step is to reduce it.",
+      "</p>"
+    ))
+  })
+  
+  # --- Website metrics ---
+  
+  output$metric_web_top_domain <- renderUI({
+    top <- websites |>
+      filter(!is.na(domain)) |>
+      group_by(domain) |>
+      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
+      slice_max(hours, n = 1)
+    tagList(
+      div(style = "font-size:1.3rem; font-weight:700; font-family:'Courier New',monospace;
+                   color:#f3f4f6; word-break:break-word;", top$domain),
+      div(style = "font-size:0.7rem; color:#6b7280; margin-top:0.35rem;",
+          paste0(round(top$hours, 0), "h total"))
+    )
+  })
+  
+  output$metric_web_ai <- renderUI({
+    ai_weekly <- websites |>
+      filter(category == "AI Tools") |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
+      group_by(week) |>
+      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+      pull(hrs) |> mean()
+    HTML(paste0(round(ai_weekly, 1), "h/wk"))
+  })
+  
+  output$metric_web_domains <- renderUI({
+    n <- websites |> filter(!is.na(domain)) |> pull(domain) |> n_distinct()
+    HTML(as.character(n))
+  })
 
   # ===========================================================================
   # TIME OF DAY TAB
@@ -236,10 +377,16 @@ server <- function(input, output, session) {
       pivot_longer(c(productive, unproductive), names_to = "type", values_to = "hours") |>
       mutate(type = factor(str_to_title(type), levels = c("Unproductive", "Productive")))
 
+    contract_end <- floor_date(ymd("2026-03-23"), "week", week_start = 1)
+    min_y <- min(df$hours, na.rm = TRUE)
+    
     p = ggplot(df, aes(x = week, y = hours)) +
-      geom_area(aes(fill = type, color = type),position = "identity", alpha = 0.7) +
+      geom_area(aes(fill = type, color = type), position = "identity", alpha = 0.7) +
       geom_line(aes(y = total), color = "gray50", linetype = "dashed") +
-      geom_vline(xintercept= floor_date(ymd("2026-03-23"), "week", week_start=1), linetype = "dashed", color = "red") +
+      annotate("segment", x = contract_end, xend = contract_end, y = min_y, yend = 0,
+               color = "#ef4444", linetype = "dashed", linewidth = 0.5, alpha = 0.6) +
+      annotate("text", x = contract_end, y = -2, label = "Contract ended", 
+               vjust = 1, hjust = 0.5, size = 2.5, color = "#ef4444", fontface = "italic") +
       scale_fill_manual(values  = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
       scale_color_manual(values = c("Productive" = "#2ecc71", "Unproductive" = "#e74c3c")) +
       scale_x_datetime(date_labels = "%b %d") +
@@ -298,144 +445,5 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
 
-  # ===========================================================================
-  # WEBSITES TAB
-  # ===========================================================================
   
-  # Reactive: aggregate web usage by period + display category, with top-3 domains
-  web_data <- reactive({
-    top_cats <- web_cats[seq_len(input$top_n_web)]
-
-    enriched <- websites |>       
-      mutate(
-        period      = floor_date(event_start, input$period_web, week_start = 1),
-        display_cat = if_else(category %in% top_cats, category, "Other")
-      )
-
-    top3 <- enriched |>
-      filter(!is.na(domain)) |>
-      group_by(period, display_cat, domain) |>
-      summarise(dom_hours = sum(active_duration) / 3600, .groups = "drop") |>
-      group_by(period, display_cat) |>
-      slice_max(dom_hours, n = 3, with_ties = FALSE) |>
-      mutate(dom_label = paste0(domain, " (", round(dom_hours, 1), "h)")) |>
-      summarise(top_domains = paste(dom_label, collapse = "<br>"), .groups = "drop")
-
-    enriched |>
-      mutate(category = factor(display_cat, levels = c(top_cats, "Other"))) |>
-      group_by(period, category) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
-      left_join(top3, by = c("period", "category" = "display_cat")) |>
-      mutate(
-        tooltip = paste0(
-          "<b>", category, "</b>  ", round(hours, 1), "h<br>",
-          "<span style='color:#9ca3af'>", top_domains, "</span>"
-        )
-      )
-  })
-
-  output$chart_web <- renderPlotly({
-    date_fmt <- if (input$period_web == "week") "%b %d" else "%b %Y"
-    
-    cat_order = web_data() %>% 
-      filter(category != "Other") %>% 
-      group_by(category) %>% 
-      summarise(s=sum(hours)) %>% 
-      arrange(s, desc=FALSE) %>%  
-      pull(category)
-    
-    cat_order = c("Other",cat_order)
-
-    p <- ggplot(web_data(), aes(x = period, y = hours, 
-                                fill = factor(category, levels=cat_order), text = tooltip)) +
-      geom_bar(stat = "identity") +
-      scale_fill_manual(values = web_colors, drop = TRUE) +
-      scale_y_continuous(limits = c(0, max_y_web[[input$period_web]]), expand = c(0, 0)) +
-      scale_x_datetime(date_labels = date_fmt) +
-      chart_theme() +
-      labs(x = NULL, y = "Hours", fill = NULL)
-
-    ggplotly(p, tooltip = "text") |>
-      apply_dark_layout() %>%
-      htmlwidgets::onRender(bar_highlight_js) |>
-      config(displayModeBar = FALSE)
-  })
-
-  # --- Websites sidebar story ---
-
-  output$sidebar_web_story <- renderUI({
-    top <- websites |>
-      filter(!is.na(domain)) |>
-      group_by(domain) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
-      slice_max(hours, n = 1)
-
-    ai_weekly <- websites |>
-      filter(category == "AI Tools") |>
-      mutate(week = floor_date(event_start, "week", week_start=1)) |>
-      group_by(week) |>
-      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
-      pull(hrs) |> mean() |> round(1)
-
-    n_domains <- websites |> filter(!is.na(domain)) |> pull(domain) |> n_distinct()
-
-    # Social media + entertainment trend
-    se_trend <- websites |>
-      filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
-      mutate(week = floor_date(event_start, "week", week_start=1)) |>
-      group_by(week) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop")
-    se_first2 <- mean(slice_head(se_trend, n = 2)$hours) |> round(1)
-    se_last2 <- mean(slice_tail(se_trend, n = 2)$hours) |> round(1)
-
-    HTML(paste0(
-      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
-      "<strong style='color:#f3f4f6;'>", top$domain, "</strong> is the most visited domain overall, ",
-      "accounting for <strong style='color:#f3f4f6;'>", round(top$hours, 0), "h</strong> of total tracked time. ",
-      "In total, <strong style='color:#f3f4f6;'>",
-      n_domains, "</strong> unique domains appear in the data.",
-      "</p>",
-      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;'>",
-      "AI tools (claude.ai, chatgpt.com) average <strong style='color:#f3f4f6;'>",
-      ai_weekly, "h/wk</strong>, representing an emerging category of development-focused tools.",
-      "</p>",
-      "<p style='color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0;'>",
-      "<span style='color:#ef4444;'>⚠️ Emerging concern:</span> social media and entertainment time has spiked dramatically. ",
-      "The first two weeks averaged <strong style='color:#f3f4f6;'>", se_first2, "h/wk</strong>, ",
-      "but the last two weeks jumped to <strong style='color:#f3f4f6;'>", se_last2, "h/wk</strong>. ",
-      "This dashboard helped identify the problem — next step is to reduce it.",
-      "</p>"
-    ))
-  })
-
-  # --- Website metrics ---
-
-  output$metric_web_top_domain <- renderUI({
-    top <- websites |>
-      filter(!is.na(domain)) |>
-      group_by(domain) |>
-      summarise(hours = sum(active_duration) / 3600, .groups = "drop") |>
-      slice_max(hours, n = 1)
-    tagList(
-      div(style = "font-size:1.3rem; font-weight:700; font-family:'Courier New',monospace;
-                   color:#f3f4f6; word-break:break-word;", top$domain),
-      div(style = "font-size:0.7rem; color:#6b7280; margin-top:0.35rem;",
-          paste0(round(top$hours, 0), "h total"))
-    )
-  })
-
-  output$metric_web_ai <- renderUI({
-    ai_weekly <- websites |>
-      filter(category == "AI Tools") |>
-      mutate(week = floor_date(event_start, "week", week_start=1)) |>
-      group_by(week) |>
-      summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
-      pull(hrs) |> mean()
-    HTML(paste0(round(ai_weekly, 1), "h/wk"))
-  })
-
-  output$metric_web_domains <- renderUI({
-    n <- websites |> filter(!is.na(domain)) |> pull(domain) |> n_distinct()
-    HTML(as.character(n))
-  })
 }

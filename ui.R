@@ -29,13 +29,6 @@ ui <- page_navbar(
         class = "metrics-row",
         div(
           class = "metric-card",
-          div(class = "insight-label", "Gaming hours reduced"),
-          div(class = "insight-value green", paste0("↓ ", intro_gaming_drop, "%")),
-          div(class = "insight-note",
-            "Weekly gaming avg fell from ~12.9h in the first four weeks to ~0.7h in the last four.")
-        ),
-        div(
-          class = "metric-card",
           div(class = "insight-label", "Total screen time tracked"),
           div(class = "insight-value", paste0(intro_total_hours, "h")),
           div(class = "insight-note",
@@ -43,10 +36,17 @@ ui <- page_navbar(
         ),
         div(
           class = "metric-card",
+          div(class = "insight-label", "Gaming hours reduced"),
+          div(class = "insight-value green", paste0("↓ ", intro_gaming_drop, "%")),
+          div(class = "insight-note",
+              "Weekly gaming avg fell from ~12.9h in the first four weeks to ~0.4h in the last four.")
+        ),
+        div(
+          class = "metric-card",
           div(class = "insight-label", "AI tools — weekly avg"),
           div(class = "insight-value", paste0(intro_ai_weekly, "h")),
           div(class = "insight-note",
-            "Time on claude.ai and chatgpt.com — a consistent part of the development workflow.")
+            "Time on claude.ai and chatgpt.com — a growing part of the development workflow.")
         ),
         div(
           class = "metric-card",
@@ -62,7 +62,14 @@ ui <- page_navbar(
           div(class = "insight-label", "Email — weekly avg"),
           div(class = "insight-value", paste0(intro_email_weekly, "h")),
           div(class = "insight-note",
-            "Time spent on email and communication platforms each week.")
+            "Time spent on emails each week.")
+        ),
+        div(
+          class = "metric-card",
+          div(class = "insight-label", "Business hours productivity"),
+          div(class = "insight-value", paste0(prod_rate, "%")),
+          div(class = "insight-note",
+            "Overall productivity rate during weekday business hours (9 AM – 5 PM).")
         )
       ),
 
