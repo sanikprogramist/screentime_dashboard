@@ -158,7 +158,7 @@ ui <- page_navbar(
           div(
             class = "metric-card",
             style = "padding: 1rem;",
-            div(class = "metric-label", style = "font-size: 0.75rem;", "✨ Gaming Trend"),
+            div(class = "metric-label", style = "font-size: 0.75rem;", "✨ Gaming Trend (last 4 Weeks)"),
             div(class = "metric-value", style = "font-size: 1.3rem;", uiOutput("metric_video_games")),
             div(class = "metric-subtitle", style = "font-size: 0.7rem;", uiOutput("metric_video_game_trend_arrow"))
           )
@@ -181,74 +181,62 @@ ui <- page_navbar(
       )
     )
   ),
-
-  # --- Time of Day tab --------------------------------------------------------
+  
+  # --- Websites tab -----------------------------------------------------------
   nav_panel(
-    title = "Time of Day",
+    title = "Websites",
     layout_sidebar(
       sidebar = sidebar(
         width = 290,
-        h6("TIME OF DAY", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
-        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
-          "Screen time isn't spread evenly through the day. Usage peaks around ",
-          tags$strong(style = "color:#f3f4f6;",
-            sprintf("%02d:00", tod_peak_hour)),
-          " on most days, and ",
-          tags$strong(style = "color:#f3f4f6;", tod_busiest_day),
-          " is consistently the heaviest day of the week."
-        ),
-        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
-          "Weekdays average ",
-          tags$strong(style = "color:#f3f4f6;",
-            paste0(tod_wk_vs_we$avg[!tod_wk_vs_we$is_weekend], "h")),
-          " daily vs. ",
-          tags$strong(style = "color:#f3f4f6;",
-            paste0(tod_wk_vs_we$avg[tod_wk_vs_we$is_weekend], "h")),
-          " on weekends."
-        ),
+        h6("WEBSITES", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
+        uiOutput("sidebar_web_story"),
         hr(style = "border-color:#374151; margin: 1rem 0;"),
         p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
-          "A few recurring evening sessions create distinctive spikes: ",
-          "board games on Monday, a family call on Wednesday, D&D on Tuesday — ",
-          "all landing around 21:00."
+          "Switch between weekly and monthly views, or adjust how many categories are shown in the breakdown below."
         )
       ),
       div(
-        class = "metrics-row",
-        style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
+        style = "display: flex; flex-direction: column; gap: 1.5rem;",
         div(
-          class = "metric-card",
-          style = "padding: 1rem;",
-          div(class = "metric-label", style = "font-size: 0.75rem;", "⏰ Peak Usage Hour"),
-          div(class = "metric-value", style = "font-size: 1.3rem;", sprintf("%02d:00", tod_peak_hour)),
-          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Most active hour across all days"))
-        ),
-        div(
-          class = "metric-card",
-          style = "padding: 1rem;",
-          div(class = "metric-label", style = "font-size: 0.75rem;", "📅 Busiest Day"),
-          div(class = "metric-value", style = "font-size: 1.3rem;", tod_busiest_day),
-          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Highest average daily screen time"))
-        ),
-        div(
-          class = "metric-card",
-          style = "padding: 1rem;",
-          div(class = "metric-label", style = "font-size: 0.75rem;", "⚖️ Weekday vs Weekend"),
+          class = "metrics-row",
+          style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
           div(
-            class = "metric-value", style = "font-size: 1.3rem;",
-            paste0(
-              tod_wk_vs_we$avg[!tod_wk_vs_we$is_weekend], "h",
-              " · ",
-              tod_wk_vs_we$avg[tod_wk_vs_we$is_weekend], "h"
-            )
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "🏆 Top Domain"),
+            uiOutput("metric_web_top_domain")
           ),
-          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Weekdays vs weekends"))
+          div(
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "🤖 AI Usage"),
+            div(class = "metric-value", style = "font-size: 1.3rem;", uiOutput("metric_web_ai")),
+            div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Weekly avg"))
+          ),
+          div(
+            class = "metric-card",
+            style = "padding: 1rem;",
+            div(class = "metric-label", style = "font-size: 0.75rem;", "🌐 Sites Explored"),
+            div(class = "metric-value", style = "font-size: 1.3rem;", uiOutput("metric_web_domains")),
+            div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Unique domains"))
+          )
+        ),
+        card(
+          full_screen = TRUE,
+          card_header("Website Usage Over Time"),
+          card_body(plotlyOutput("chart_web", height = "450px")),
+          card_footer(
+            div(
+              style = "display:flex; gap:2.5rem; flex-wrap:wrap; align-items:flex-start;",
+              radioButtons("period_web", "Group by",
+                           choices = c("Week" = "week", "Month" = "month"),
+                           selected = "week", inline = TRUE),
+              sliderInput("top_n_web", "Top categories",
+                          min = 1, max = length(web_cats), value = 8, step = 1,
+                          width = "220px")
+            )
+          )
         )
-      ),
-      card(
-        full_screen = TRUE,
-        card_header("App Usage by Hour of Day"),
-        plotlyOutput("chart_tod", height = "450px")
       )
     )
   ),
@@ -332,62 +320,74 @@ ui <- page_navbar(
       )
     )
   ),
-
-  # --- Websites tab -----------------------------------------------------------
+  
+  # --- Time of Day tab --------------------------------------------------------
   nav_panel(
-    title = "Websites",
+    title = "Time of Day",
     layout_sidebar(
       sidebar = sidebar(
         width = 290,
-        h6("WEBSITES", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
-        uiOutput("sidebar_web_story"),
+        h6("TIME OF DAY", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
+        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
+          "Screen time isn't spread evenly through the day. Usage peaks around ",
+          tags$strong(style = "color:#f3f4f6;",
+                      sprintf("%02d:00", tod_peak_hour)),
+          " on most days, and ",
+          tags$strong(style = "color:#f3f4f6;", tod_busiest_day),
+          " is consistently the heaviest day of the week."
+        ),
+        p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
+          "Weekdays average ",
+          tags$strong(style = "color:#f3f4f6;",
+                      paste0(tod_wk_vs_we$avg[!tod_wk_vs_we$is_weekend], "h")),
+          " daily vs. ",
+          tags$strong(style = "color:#f3f4f6;",
+                      paste0(tod_wk_vs_we$avg[tod_wk_vs_we$is_weekend], "h")),
+          " on weekends."
+        ),
         hr(style = "border-color:#374151; margin: 1rem 0;"),
         p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
-          "Switch between weekly and monthly views, or adjust how many categories are shown in the breakdown below."
+          "A few recurring evening sessions create distinctive spikes: ",
+          "board games on Monday, a family call on Wednesday, D&D on Tuesday — ",
+          "all landing around 21:00."
         )
       ),
       div(
-        style = "display: flex; flex-direction: column; gap: 1.5rem;",
+        class = "metrics-row",
+        style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
         div(
-          class = "metrics-row",
-          style = "grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 0.5rem;",
-          div(
-            class = "metric-card",
-            style = "padding: 1rem;",
-            div(class = "metric-label", style = "font-size: 0.75rem;", "🏆 Top Domain"),
-            uiOutput("metric_web_top_domain")
-          ),
-          div(
-            class = "metric-card",
-            style = "padding: 1rem;",
-            div(class = "metric-label", style = "font-size: 0.75rem;", "🤖 AI Usage"),
-            div(class = "metric-value", style = "font-size: 1.3rem;", uiOutput("metric_web_ai")),
-            div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Weekly avg"))
-          ),
-          div(
-            class = "metric-card",
-            style = "padding: 1rem;",
-            div(class = "metric-label", style = "font-size: 0.75rem;", "🌐 Sites Explored"),
-            div(class = "metric-value", style = "font-size: 1.3rem;", uiOutput("metric_web_domains")),
-            div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Unique domains"))
-          )
+          class = "metric-card",
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "⏰ Peak Usage Hour"),
+          div(class = "metric-value", style = "font-size: 1.3rem;", sprintf("%02d:00", tod_peak_hour)),
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Most active hour across all days"))
         ),
-        card(
-          full_screen = TRUE,
-          card_header("Website Usage Over Time"),
-          card_body(plotlyOutput("chart_web", height = "450px")),
-          card_footer(
-            div(
-              style = "display:flex; gap:2.5rem; flex-wrap:wrap; align-items:flex-start;",
-              radioButtons("period_web", "Group by",
-                choices = c("Week" = "week", "Month" = "month"),
-                selected = "week", inline = TRUE),
-              sliderInput("top_n_web", "Top categories",
-                min = 1, max = length(web_cats), value = 8, step = 1,
-                width = "220px")
+        div(
+          class = "metric-card",
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "📅 Busiest Day"),
+          div(class = "metric-value", style = "font-size: 1.3rem;", tod_busiest_day),
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Highest average daily screen time"))
+        ),
+        div(
+          class = "metric-card",
+          style = "padding: 1rem;",
+          div(class = "metric-label", style = "font-size: 0.75rem;", "⚖️ Weekday vs Weekend"),
+          div(
+            class = "metric-value", style = "font-size: 1.3rem;",
+            paste0(
+              tod_wk_vs_we$avg[!tod_wk_vs_we$is_weekend], "h",
+              " · ",
+              tod_wk_vs_we$avg[tod_wk_vs_we$is_weekend], "h"
             )
-          )
+          ),
+          div(class = "metric-subtitle", style = "font-size: 0.7rem;", span("Weekdays vs weekends"))
         )
+      ),
+      card(
+        full_screen = TRUE,
+        card_header("App Usage by Hour of Day"),
+        plotlyOutput("chart_tod", height = "450px")
       )
     )
   )

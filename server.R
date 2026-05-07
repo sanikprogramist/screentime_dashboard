@@ -9,14 +9,10 @@ server <- function(input, output, session) {
 
   # Reactive: aggregate app usage by period + category, with top-3 tooltip
   apps_data <- reactive({
-    cat_order <- app_cats[app_cats %in% input$cats_apps]
-
     filtered <- apps |>
       filter(category %in% input$cats_apps) |>
       mutate(
-        period   = floor_date(event_start, input$period_apps, week_start = 1),
-        category = factor(category, levels = cat_order)
-      )
+        period   = floor_date(event_start, input$period_apps, week_start = 1))
 
     top3 <- filtered |>
       group_by(period, category, app) |>
@@ -40,8 +36,14 @@ server <- function(input, output, session) {
 
   output$chart_apps <- renderPlotly({
     date_fmt <- if (input$period_apps == "week") "%b %d" else "%b %Y"
-
-    p <- ggplot(apps_data(), aes(x = period, y = hours, fill = category, text = tooltip)) +
+    
+    cat_order = apps_data() %>% 
+      group_by(category) %>% 
+      summarise(s=sum(hours)) %>% 
+      arrange(s, desc=FALSE) %>%  
+      pull(category)
+    
+    p <- ggplot(apps_data(), aes(x = period, y = hours, fill = factor(category, levels=cat_order), text = tooltip)) +
       geom_bar(stat = "identity") +
       scale_fill_manual(values = app_colors) +
       scale_y_continuous(limits = c(0, max_y_apps[[input$period_apps]]), expand = c(0, 0)) +
@@ -59,12 +61,12 @@ server <- function(input, output, session) {
 
   output$sidebar_apps_story <- renderUI({
     n_weeks  <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       pull(week) |> n_distinct()
     avg_all  <- round(sum(apps$active_duration) / 3600 / n_weeks, 0)
 
     weekly <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop")
     last4_avg  <- round(mean(tail(weekly$total, 4)), 1)
@@ -76,7 +78,7 @@ server <- function(input, output, session) {
       paste0("up ", pct, "% from the first four weeks")
 
     gaming_last4 <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week, category) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
       complete(week, category, fill = list(total = 0)) |>
@@ -103,7 +105,7 @@ server <- function(input, output, session) {
 
   output$metric_weekly_hours <- renderUI({
     n_weeks <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week",week_start=1)) |>
       pull(week) |> n_distinct()
     avg <- sum(apps$active_duration) / 3600 / n_weeks
     HTML(paste0(round(avg, 0), "h"))
@@ -111,7 +113,7 @@ server <- function(input, output, session) {
 
   output$metric_current_period <- renderUI({
     avg_last4 <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
       slice_tail(n = 4) |>
@@ -121,7 +123,7 @@ server <- function(input, output, session) {
 
   output$metric_trend_arrow <- renderUI({
     weekly <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop")
     first4 <- mean(slice_head(weekly, n = 4)$total)
@@ -136,7 +138,7 @@ server <- function(input, output, session) {
 
   output$metric_video_games <- renderUI({
     avg_last4 <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week, category) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
       complete(week, category, fill = list(total = 0)) |>
@@ -148,7 +150,7 @@ server <- function(input, output, session) {
 
   output$metric_video_game_trend_arrow <- renderUI({
     gaming <- apps |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week, category) |>
       summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
       complete(week, category, fill = list(total = 0)) |>
@@ -299,12 +301,12 @@ server <- function(input, output, session) {
   # ===========================================================================
   # WEBSITES TAB
   # ===========================================================================
-
+  
   # Reactive: aggregate web usage by period + display category, with top-3 domains
   web_data <- reactive({
     top_cats <- web_cats[seq_len(input$top_n_web)]
 
-    enriched <- websites |>
+    enriched <- websites |>       
       mutate(
         period      = floor_date(event_start, input$period_web, week_start = 1),
         display_cat = if_else(category %in% top_cats, category, "Other")
@@ -334,8 +336,18 @@ server <- function(input, output, session) {
 
   output$chart_web <- renderPlotly({
     date_fmt <- if (input$period_web == "week") "%b %d" else "%b %Y"
+    
+    cat_order = web_data() %>% 
+      filter(category != "Other") %>% 
+      group_by(category) %>% 
+      summarise(s=sum(hours)) %>% 
+      arrange(s, desc=FALSE) %>%  
+      pull(category)
+    
+    cat_order = c("Other",cat_order)
 
-    p <- ggplot(web_data(), aes(x = period, y = hours, fill = category, text = tooltip)) +
+    p <- ggplot(web_data(), aes(x = period, y = hours, 
+                                fill = factor(category, levels=cat_order), text = tooltip)) +
       geom_bar(stat = "identity") +
       scale_fill_manual(values = web_colors, drop = TRUE) +
       scale_y_continuous(limits = c(0, max_y_web[[input$period_web]]), expand = c(0, 0)) +
@@ -360,7 +372,7 @@ server <- function(input, output, session) {
 
     ai_weekly <- websites |>
       filter(category == "AI Tools") |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
       pull(hrs) |> mean() |> round(1)
@@ -370,7 +382,7 @@ server <- function(input, output, session) {
     # Social media + entertainment trend
     se_trend <- websites |>
       filter(category %in% c("Social Media & Forums", "Entertainment & Leisure")) |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(hours = sum(active_duration) / 3600, .groups = "drop")
     se_first2 <- mean(slice_head(se_trend, n = 2)$hours) |> round(1)
@@ -415,7 +427,7 @@ server <- function(input, output, session) {
   output$metric_web_ai <- renderUI({
     ai_weekly <- websites |>
       filter(category == "AI Tools") |>
-      mutate(week = floor_date(event_start, "week")) |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
       group_by(week) |>
       summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
       pull(hrs) |> mean()

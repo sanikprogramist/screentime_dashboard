@@ -326,8 +326,26 @@ ggplotly(p, tooltip = "text") |>
   apply_dark_layout() |>
   config(displayModeBar = FALSE)
 
+```
+```{r}
+apps = readRDS("data/apps_clean.rds")
+test = apps |> 
+  mutate(week=floor_date(event_start, "week",week_start=1))|>
+  group_by(week,category) |>
+  summarise(total=sum(active_duration)/3600, .groups="drop") |>
+  complete(week, category, fill = list(total = 0)) |>
+  filter(category == "Gaming") |>
+  slice_head(n = 4) |>
+  pull(total)
 
 
-
+avg_last4 <- apps |>
+      mutate(week = floor_date(event_start, "week", week_start=1)) |>
+      group_by(week, category) |>
+      summarise(total = sum(active_duration) / 3600, .groups = "drop") |>
+      complete(week, category, fill = list(total = 0)) |>
+      filter(category == "Gaming") |>
+      slice_tail(n = 4) |>
+      pull(total) |> mean()
 ```
 
