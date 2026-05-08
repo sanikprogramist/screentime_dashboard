@@ -1,0 +1,10 @@
+name: screentime-dashboard
+title:
+username: alex-markov
+account: alex-markov
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17323095
+bundleId: 11967095
+url: https://alex-markov.shinyapps.io/screentime-dashboard/
+version: 1

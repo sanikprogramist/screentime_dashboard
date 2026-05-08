@@ -1,10 +1,11 @@
 # Screen Time Dashboard
 
 A 13-week personal analytics project built to answer one question: **where does my time actually go?**
+👉 [Access the dashboard here](https://alex-markov.shinyapps.io/screentime-dashboard/)
 
 ---
 
-## Why This Matters
+## Rationale
 
 **My generation uses technology constantly—and often unhealthily.** The average person now spends [over 7 hours per day](https://datareportal.com/global-overview-report) on digital media. For knowledge workers, it's often much higher.
 
