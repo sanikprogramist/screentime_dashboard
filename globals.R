@@ -121,21 +121,23 @@ tod_wk_vs_we <- apps |>
 
 # --- Business Hours Productivity precomputed data ----------------------------
 productive_app_cats <- c("Learning & Education", "Development & Programming",
-                         "Productivity & Work", "Art & Creative")
-productive_web_cats <- c("Communication", "Reference & Research", "Productivity & Work",
+                         "Productivity & Work", "Art & Creative", "Work Communication")
+productive_web_cats <- c("Work Communication", "Reference & Research", "Productivity & Work",
                          "Development & Programming", "Learning & Education", "Job Search",
                          "AI Tools", "Science & Academia", "Government & Administration")
 
 bh_apps <- apps |>
-  mutate(productive = category %in% productive_app_cats) |>
-  filter(category != "Browser")
+  mutate(productive = category %in% productive_app_cats,
+         name=app) |>
+  filter(category != "Browser") 
 
 bh_websites <- websites |>
-  mutate(productive = category %in% productive_web_cats)
+  mutate(productive = category %in% productive_web_cats,
+         name=domain)
 
 business_hours <- bind_rows(
-  select(bh_apps,     event_start, active_duration, category, productive),
-  select(bh_websites, event_start, active_duration, category, productive)
+  select(bh_apps,     event_start, active_duration, category, productive, name),
+  select(bh_websites, event_start, active_duration, category, productive, name)
 ) |>
   mutate(weekday_num = lubridate::wday(event_start, week_start = 1)) |>
   filter(hour(event_start) > 6, hour(event_start) < 17,
@@ -151,20 +153,45 @@ weekly_business <- business_hours |>
     productivity_ratio = round(productive / total * 100, 1)
   )
 
+# Top 3 apps/domains per category (for tooltips)
+top_names_per_cat <- business_hours |>
+  filter(!is.na(name)) |>
+  group_by(category, name) |>
+  summarise(name_hours = sum(active_duration) / 3600, .groups = "drop") |>
+  group_by(category) |>
+  slice_max(name_hours, n = 3, with_ties = FALSE) |>
+  mutate(name_label = paste0(name, " (", round(name_hours, 1), "h)")) |>
+  summarise(top_names = paste(name_label, collapse = "<br>"), .groups = "drop")
+
 category_business <- business_hours |>
   group_by(category, productive) |>
   summarise(hours = sum(active_duration) / 3600, sessions = n(), .groups = "drop") |>
-  mutate(category = if_else(is.na(category), "Misc", category))
+  mutate(category = if_else(is.na(category), "Misc", category)) |>
+  left_join(top_names_per_cat, by = "category")
 
 top_drains_business <- category_business |>
   filter(!productive) |>
   arrange(desc(hours)) |>
-  head(8)
+  head(8) |>
+  mutate(tooltip = paste0(
+    "<b>", category, "</b><br>",
+    round(hours, 1), "h total<br>",
+    "<span style='color:#9ca3af; font-size:0.9em;'>",
+    if_else(!is.na(top_names), top_names, "—"),
+    "</span>"
+  ))
 
 productive_business <- category_business |>
   filter(productive) |>
   arrange(desc(hours)) |>
-  head(8)
+  head(8) |>
+  mutate(tooltip = paste0(
+    "<b>", category, "</b><br>",
+    round(hours, 1), "h total<br>",
+    "<span style='color:#9ca3af; font-size:0.9em;'>",
+    if_else(!is.na(top_names), top_names, "—"),
+    "</span>"
+  ))
 
 prod_rate       <- round(sum(weekly_business$productive) /
                            sum(weekly_business$total) * 100, 1)

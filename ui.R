@@ -140,7 +140,7 @@ ui <- page_navbar(
         uiOutput("sidebar_apps_story"),
         hr(style = "border-color:#374151; margin: 1rem 0;"),
         p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
-          "Adjust the time period and category filters below the chart to explore different breakdowns of app usage."
+          "Adjust the time period and category filters below the chart to explore different breakdowns of app usage. Hover over sections to view the top 3 most used apps."
         )
       ),
       div(
@@ -199,7 +199,7 @@ ui <- page_navbar(
         uiOutput("sidebar_web_story"),
         hr(style = "border-color:#374151; margin: 1rem 0;"),
         p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
-          "Switch between weekly and monthly views, or adjust how many categories are shown in the breakdown below."
+          "Switch between weekly and monthly views, or adjust how many categories are shown in the breakdown below. Hover over sections to view the top 3 most used domains."
         )
       ),
       div(
@@ -256,17 +256,20 @@ ui <- page_navbar(
         width = 290,
         h6("BUSINESS HOURS", style = "color:#6366f1; letter-spacing:.1em; margin-bottom:.75rem;"),
         p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
-          "Filtering to ", tags$strong(style = "color:#f3f4f6;", "weekdays, 9 AM – 5 PM"),
-          " gives a cleaner picture of actual work habits, removing evenings and weekends."
+          "The average office worker spends", tags$strong(style = "color:#f3f4f6;", "52.5%"), "of their 8h workday productively (",
+          tags$a("source", 
+                 href = "https://www.zippia.com/advice/average-productive-hours-per-day/",
+                 target = "_blank",
+                 style = "color:#f3f4f6; text-decoration:underline;"), ")"
         ),
         p(style = "color:#d1d5db; font-size:0.9rem; line-height:1.7; margin:0 0 .75rem;",
-          "Productive categories include Development, Learning, Productivity & Work, and AI Tools. ",
-          "Everything else is counted as unproductive."
+          "I sought to understand whether I am using the working day productively, and what were the worst distractions. ",
+          "Productive categories include Development, Learning, Productivity & Work (Mostly made up by writing in google.docs.com), and AI Tools. ",
+          "Everything else was counted as unproductive. The 'New Tab' browser window was excluded."
         ),
         hr(style = "border-color:#374151; margin: 1rem 0;"),
         p(style = "color:#6b7280; font-size:0.82rem; line-height:1.6; margin:0;",
-          "Note: Browser time is counted via the Websites data to avoid double-counting. ",
-          "Tabs like 'New Tab' are excluded."
+          "Note: At the end of March, my employment contract ended, which created a dramatic change in productivity habits. This is marked on the graph."
         )
       ),
 

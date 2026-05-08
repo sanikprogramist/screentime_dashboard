@@ -408,7 +408,7 @@ server <- function(input, output, session) {
     p <- ggplot(top_drains_business,
                 aes(x = hours, y = reorder(category, hours),
                     fill = category,
-                    text = paste0("<b>", category, "</b><br>", round(hours, 1), "h"))) +
+                    text = tooltip)) +
       geom_col(show.legend = FALSE) +
       scale_fill_manual(values = drain_colors) +
       scale_x_continuous(expand = c(0, 0, 0.05, 0)) +
@@ -431,7 +431,7 @@ server <- function(input, output, session) {
     p <- ggplot(productive_business,
                 aes(x = hours, y = reorder(category, hours),
                     fill = category,
-                    text = paste0("<b>", category, "</b><br>", round(hours, 1), "h"))) +
+                    text = tooltip)) +
       geom_col(show.legend = FALSE) +
       scale_fill_manual(values = src_colors) +
       scale_x_continuous(expand = c(0, 0, 0.05, 0)) +

@@ -10,7 +10,7 @@ library(data.table)
 library(jsonlite)
 # --- 1. Load raw data ---------------------------------------------------------
 
-db_path <- "C:/Users/Sanik/AppData/Local/activitywatch/activitywatch/aw-server/peewee-sqlite.v2.db"
+db_path <- "C:/Users/<YOUR_USER_NAME>/AppData/Local/activitywatch/activitywatch/aw-server/peewee-sqlite.v2.db"
 
 con     <- dbConnect(SQLite(), db_path)
 full_df <- dbGetQuery(con, "SELECT bucket_id, timestamp, duration, datastr FROM eventmodel")
@@ -133,117 +133,123 @@ websites_clean <- websites_clean |>
   select(event_start, event_end, active_duration, domain, title)
 
 # --- 5. Categorisation -------------------------------------------------------
-# Give top 250 domains and all apps categories using LLMs
-library(tidyverse)
 
-# Top 250 domains with hours + a few sample titles for LLM context
-domains_template <- websites_clean |>
-  group_by(name = domain) |>
-  summarise(
-    hours         = round(sum(active_duration) / 3600, 2),
-    sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
-    .groups = "drop"
-  ) |>
-  arrange(desc(hours)) |>
-  slice_head(n = 250) |>
-  mutate(type = "website", category = "")
-
-# All apps with hours + sample titles
-apps_template <- apps_clean |>
-  group_by(name = app) |>
-  summarise(
-    hours         = round(sum(active_duration) / 3600, 2),
-    sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
-    .groups = "drop"
-  ) |>
-  arrange(desc(hours)) |>
-  mutate(type = "app", category = "")
-
-template <- bind_rows(domains_template, apps_template) |>
-  select(type, name, hours, category, sample_titles)
-
-write_csv(template, "data/categories_template.csv")
-# This template can be fed into an LLM which will automatically categorise the top websites and apps into categories
-# The prompt used was: "I have a CSV with columns: type (app or website), name (domain or .exe name), hours (time spent), and sample_titles (an example of a window titles seen while using it, just for context for you). Please fill in the category column for each row. Use consistent category names like. If you're unsure you can look up the website/process name. Return the result as a CSV with only the name and category columns."
-# This was done using Anthropic Claude model Sonnet 4.6
-# it is then saved under "data/categories.csv"
-
-categories <- read_csv("data/categories.csv")
-apps_clean = apps_clean |> 
-  left_join(categories |> mutate(app=name) |> select(-name))
-websites_clean = websites_clean |>
-  left_join(categories |> mutate(domain=name) |> select(-name))
-
-# --- 6. Split events by hour for time-of-day analysis ------------------------
-# AFK time has already been removed from active_duration, so we are
-# distributing genuine active time across hour bins. Each event is split at
-# hour boundaries so the ToD tab can aggregate per-hour correctly.
-
-split_by_hour <- function(df) {
-  # First pass with plain ceiling_date (events starting exactly on the hour
-  # will have time_until_next_hour == 0 and land in overflow — handled below)
-  df <- df |>
-    mutate(
-      next_hour_boundary   = ceiling_date(event_start+1, "hour"),
-      time_until_next_hour = as.numeric(next_hour_boundary - event_start),
-      excess_time          = active_duration - time_until_next_hour
-    )
-
-  no_overflow <- df |>
-    filter(excess_time <= 0) 
-  overflow_df <- df |>
-    filter(excess_time > 0)
-
-  current <- overflow_df
-
-  while (TRUE) {
-
-    # +1 ensures ceiling_date moves forward even when event_start is on the
-    # hour boundary (ceiling_date of an exact boundary returns the same time)
-    current <- current |>
+if (file.exists("data/categories.csv") == FALSE) {
+  # Give top 250 domains and all apps categories using LLMs
+  library(tidyverse)
+  
+  # Top 250 domains with hours + a few sample titles for LLM context
+  domains_template <- websites_clean |>
+    group_by(name = domain) |>
+    summarise(
+      hours         = round(sum(active_duration) / 3600, 2),
+      sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
+      .groups = "drop"
+    ) |>
+    arrange(desc(hours)) |>
+    slice_head(n = 250) |>
+    mutate(type = "website", category = "")
+  
+  # All apps with hours + sample titles
+  apps_template <- apps_clean |>
+    group_by(name = app) |>
+    summarise(
+      hours         = round(sum(active_duration) / 3600, 2),
+      sample_titles = paste(head(unique(title[title != "" & !is.na(title)]), 3), collapse = " | "),
+      .groups = "drop"
+    ) |>
+    arrange(desc(hours)) |>
+    mutate(type = "app", category = "")
+  
+  template <- bind_rows(domains_template, apps_template) |>
+    select(type, name, hours, category, sample_titles)
+  
+  write_csv(template, "data/categories_template.csv")
+  # This template can be fed into an LLM which will automatically categorise the top websites and apps into categories
+  # The prompt used was: "I have a CSV with columns: type (app or website), name (domain or .exe name), hours (time spent), and sample_titles (an example of a window titles seen while using it, just for context for you). Please fill in the category column for each row. Use consistent category names like. If you're unsure you can look up the website/process name. Return the result as a CSV with only the name and category columns."
+  # This was done using Anthropic Claude model Sonnet 4.6
+  # it is then saved under "data/categories.csv"
+  # In my case, it wasn't perfect, so I had to manually edit the .csv
+  print("'categories_template.csv' has been created. Please categorise and save as 'categories.csv' in the data directory.")
+  print("Then, run the script again.")
+} else { 
+  categories <- read_csv("data/categories.csv")
+  apps_clean = apps_clean |> 
+    left_join(categories |> mutate(app=name) |> select(-name))
+  websites_clean = websites_clean |>
+    left_join(categories |> mutate(domain=name) |> select(-name))
+  
+  # --- 6. Split events by hour for time-of-day analysis ------------------------
+  # AFK time has already been removed from active_duration, so we are
+  # distributing genuine active time across hour bins. Each event is split at
+  # hour boundaries so the ToD tab can aggregate per-hour correctly.
+  
+  split_by_hour <- function(df) {
+    # First pass with plain ceiling_date (events starting exactly on the hour
+    # will have time_until_next_hour == 0 and land in overflow — handled below)
+    df <- df |>
       mutate(
-        next_hour_boundary   = ceiling_date(event_start + 1, "hour"),
+        next_hour_boundary   = ceiling_date(event_start+1, "hour"),
         time_until_next_hour = as.numeric(next_hour_boundary - event_start),
-        excess_time          = active_duration - time_until_next_hour)
-        
-    #for all rows, set active_duration to remaining time in the hour
-    current = current %>%
-      mutate(active_duration = case_when(
-        as.numeric(excess_time) > 0 ~ as.numeric(time_until_next_hour),
-        TRUE ~ as.numeric(active_duration)
-      ))
-
-    overflow_rows = current %>% 
+        excess_time          = active_duration - time_until_next_hour
+      )
+  
+    no_overflow <- df |>
+      filter(excess_time <= 0) 
+    overflow_df <- df |>
       filter(excess_time > 0)
-    
-    if (nrow(overflow_rows) == 0) break 
-    
-    #we will now change the rows such that they become next hour and set active duration as excess time
-    overflow_rows = overflow_rows %>% 
-      mutate(event_start = next_hour_boundary,
-             active_duration = as.numeric(excess_time))
-    
-    overflow_df = current %>% bind_rows(overflow_rows)
-    current = overflow_df
+  
+    current <- overflow_df
+  
+    while (TRUE) {
+  
+      # +1 ensures ceiling_date moves forward even when event_start is on the
+      # hour boundary (ceiling_date of an exact boundary returns the same time)
+      current <- current |>
+        mutate(
+          next_hour_boundary   = ceiling_date(event_start + 1, "hour"),
+          time_until_next_hour = as.numeric(next_hour_boundary - event_start),
+          excess_time          = active_duration - time_until_next_hour)
+          
+      #for all rows, set active_duration to remaining time in the hour
+      current = current %>%
+        mutate(active_duration = case_when(
+          as.numeric(excess_time) > 0 ~ as.numeric(time_until_next_hour),
+          TRUE ~ as.numeric(active_duration)
+        ))
+  
+      overflow_rows = current %>% 
+        filter(excess_time > 0)
+      
+      if (nrow(overflow_rows) == 0) break 
+      
+      #we will now change the rows such that they become next hour and set active duration as excess time
+      overflow_rows = overflow_rows %>% 
+        mutate(event_start = next_hour_boundary,
+               active_duration = as.numeric(excess_time))
+      
+      overflow_df = current %>% bind_rows(overflow_rows)
+      current = overflow_df
+    }
+  
+    bind_rows(no_overflow, overflow_df) |>
+      mutate(hour = hour(event_start))
   }
-
-  bind_rows(no_overflow, overflow_df) |>
-    mutate(hour = hour(event_start))
+  
+  apps_tod     <- split_by_hour(apps_clean) %>% 
+    select(-next_hour_boundary, -time_until_next_hour, -excess_time)
+  websites_tod <- split_by_hour(websites_clean) %>% 
+    select(-next_hour_boundary, -time_until_next_hour, -excess_time)
+  
+  
+  # --- 7. Save -----------------------------------------------------------------
+  
+  dir.create("data", showWarnings = FALSE)
+  saveRDS(apps_tod,     "data/apps_clean.rds") 
+  saveRDS(websites_tod,  "data/websites_clean.rds")
+  
+  message(
+    "ToD files: ", nrow(apps_tod), " app rows and ",
+    nrow(websites_tod), " website rows after hour splitting."
+  )
 }
-
-apps_tod     <- split_by_hour(apps_clean) %>% 
-  select(-next_hour_boundary, -time_until_next_hour, -excess_time)
-websites_tod <- split_by_hour(websites_clean) %>% 
-  select(-next_hour_boundary, -time_until_next_hour, -excess_time)
-
-
-# --- 7. Save -----------------------------------------------------------------
-
-dir.create("data", showWarnings = FALSE)
-saveRDS(apps_tod,     "data/apps_clean.rds") 
-saveRDS(websites_tod,  "data/websites_clean.rds")
-
-message(
-  "ToD files: ", nrow(apps_tod), " app rows and ",
-  nrow(websites_tod), " website rows after hour splitting."
-)
