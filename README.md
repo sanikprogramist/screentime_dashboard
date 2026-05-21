@@ -2,7 +2,7 @@
 
 A 13-week personal analytics project built to answer one question: **where does my time actually go?**
 
-👉 [Access the dashboard here](https://alex-markov.shinyapps.io/screentime-dashboard/)
+## 👉 [Access the dashboard here](https://alex-markov.shinyapps.io/screentime-dashboard/)
 
 ---
 
