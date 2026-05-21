@@ -236,10 +236,10 @@ intro_top_domain <- websites |>
   pull(domain)
 
 intro_email_weekly <- websites |>
-  filter(category == "Communication") |>
+  filter(category == "Work Communication") |>
   mutate(week = floor_date(event_start, "week", week_start = 1)) |>
   group_by(week) |>
-  summarise(hrs = sum(active_duration) / 3600, .groups = "drop") |>
+  summarise(hrs = sum(active_duration, na.rm=TRUE) / 3600, .groups = "drop") |>
   pull(hrs) |> mean() |> round(1)
 
 
