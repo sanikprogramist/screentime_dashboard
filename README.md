@@ -16,6 +16,10 @@ Research is increasingly clear: [heavy digital entertainment consumption is link
 
 **The solution:** I built this dashboard. Raw ActivityWatch data → SQL, cleaning → R data analysis → interactive Shiny visualization. Now I can see exactly where time goes and, crucially, whether I'm actually changing my behavior.
 
+### Example screenshot from the dashboard:
+![alt text][screenshot]
+
+[screenshot]: https://github.com/sanikprogramist/screentime_dashboard/blob/master/screenshots/app_tab.JPG "The applications tab of the dashboard"
 ---
 
 ## Key Findings
@@ -43,6 +47,10 @@ Research is increasingly clear: [heavy digital entertainment consumption is link
 
 **Productivity** — business hours analysis (weekdays, 9AM–5PM). Stacked area chart of productive vs. unproductive time over the 13 weeks, plus bar charts for the top productivity drains and where focused time actually goes.
 
+### Example screenshot from the dashboard:
+![alt text][screenshot2]
+
+[screenshot2]: https://github.com/sanikprogramist/screentime_dashboard/blob/master/screenshots/productivity_tab.JPG "The productivity tab of the dashboard"
 ---
 
 ## Tools Used
